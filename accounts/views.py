@@ -73,3 +73,4 @@ def login_view(request):
         return Response({
             'error': 'Error en el servidor'
         }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+    
