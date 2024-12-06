@@ -1,0 +1,35 @@
+# Sistema operativo
+*.DS_Store
+*.log
+*.pot
+*.pyc
+*.pyo
+*.swp
+*.swo
+*.bak
+*.tmp
+
+# Archivos de Python
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Entornos virtuales
+env/
+venv/
+ENV/
+VENV/
+
+# Django
+*.sqlite3
+db.sqlite3
+/media/
+staticfiles/
+
+# Node (si usas npm para frontend)
+node_modules/
+npm-debug.log*
+
+# Archivos de configuración personal
+*.env
+.env
