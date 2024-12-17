@@ -152,6 +152,13 @@ class ZonaModelSerializer(serializers.ModelSerializer):
 class EdificioModelSerializer(serializers.ModelSerializer):
     multimedia = MultimediaModelSerializer(many=True, read_only=True)
     zonas_de_interes = ZonasDeInteresModelSerializer(many=True, read_only=True)
+    zonas_de_interes_ids = serializers.PrimaryKeyRelatedField(
+        source='zonas_de_interes',
+        queryset=ZonasDeInteresModel.objects.all(),
+        many=True,
+        required=False,
+        write_only=True
+    )
     barrio_nombre = serializers.CharField(source='barrio.nombre', read_only=True)
     amenidades = AmenidadesModelSerializer(many=True, read_only=True)
     amenidades_ids = serializers.PrimaryKeyRelatedField(
@@ -168,8 +175,8 @@ class EdificioModelSerializer(serializers.ModelSerializer):
             'id', 'nombre', 'sigla', 'desarrollador', 
             'descripcion', 'direccion', 'estrato', 
             'telefono', 'barrio', 'barrio_nombre',
-            'multimedia', 'zonas_de_interes', 'amenidades',
-            'amenidades_ids'
+            'multimedia', 'zonas_de_interes', 'zonas_de_interes_ids',
+            'amenidades', 'amenidades_ids'
         ]
 
     def to_representation(self, instance):
@@ -192,9 +199,13 @@ class EdificioModelSerializer(serializers.ModelSerializer):
     def update(self, instance, validated_data):
         print("Datos validados en update:", validated_data)
         
-        # Manejar amenidades si están presentes en los datos
+        # Manejar amenidades si están presentes
         if 'amenidades' in validated_data:
             instance.amenidades.set(validated_data.pop('amenidades'))
+        
+        # Manejar zonas de interés si están presentes
+        if 'zonas_de_interes' in validated_data:
+            instance.zonas_de_interes.set(validated_data.pop('zonas_de_interes'))
         
         # Actualizar los demás campos
         for attr, value in validated_data.items():
