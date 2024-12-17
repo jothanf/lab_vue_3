@@ -1,6 +1,6 @@
 from rest_framework import serializers
 from django.contrib.auth.models import User
-from .models import AgenteModel
+from .models import AgenteModel, ClienteModel
 
 class UserSerializer(serializers.ModelSerializer):
     password = serializers.CharField(write_only=True)
@@ -35,3 +35,8 @@ class AgenteSerializer(serializers.ModelSerializer):
 class LoginSerializer(serializers.Serializer):
     username = serializers.CharField()
     password = serializers.CharField(write_only=True)
+
+class ClienteSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = ClienteModel
+        fields = '__all__'
