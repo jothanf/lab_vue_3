@@ -252,6 +252,8 @@ class EdificioModel(models.Model):
     contacto_administrador = models.ForeignKey('ContactoAdministradorModel', on_delete=models.SET_NULL, blank=True, null=True)
     sigla = models.CharField(max_length=10, blank=True)
     desarrollador = models.CharField(max_length=100, blank=True, null=True)
+    estado = models.CharField(max_length=50, default='Entregado')
+    tipo_edificio = models.CharField(max_length=100, default='Edificio Residencial')
     barrio = models.ForeignKey('BarrioModel', on_delete=models.SET_NULL, blank=True, null=True)
     direccion = models.CharField(max_length=200, blank=True, null=True)
     estrato = models.IntegerField(null=True, blank=True)
@@ -327,6 +329,7 @@ class BarrioModel(models.Model):
     ],
     default='residencial'
     )
+    zonas_de_interes = models.ManyToManyField(ZonasDeInteresModel, related_name='barrios', blank=True)
     multimedia = GenericRelation('MultimediaModel', related_query_name='barrio')
 
     def __str__(self):

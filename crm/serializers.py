@@ -110,6 +110,14 @@ class BarrioModelSerializer(serializers.ModelSerializer):
         queryset=LocalidadModel.objects.all(),
         required=True
     )
+    zonas_de_interes = ZonasDeInteresModelSerializer(many=True, read_only=True)
+    zonas_de_interes_ids = serializers.PrimaryKeyRelatedField(
+        source='zonas_de_interes',
+        queryset=ZonasDeInteresModel.objects.all(),
+        many=True,
+        required=False,
+        write_only=True
+    )
 
     class Meta:
         model = BarrioModel
@@ -117,25 +125,18 @@ class BarrioModelSerializer(serializers.ModelSerializer):
             'id', 'nombre', 'sigla', 'descripcion', 
             'localidad', 'localidad_nombre',
             'estrato_predominante', 'tipo_barrio', 
-            'multimedia'
+            'multimedia', 'zonas_de_interes', 'zonas_de_interes_ids'
         ]
 
-    def to_representation(self, instance):
-        data = super().to_representation(instance)
-        # Asegurarse de que localidad sea el ID en la respuesta
-        if isinstance(data.get('localidad'), dict):
-            data['localidad'] = data['localidad']['id']
-        return data
-
     def update(self, instance, validated_data):
-        # Asegurarse de que localidad sea un ID
+        # Manejar la localidad
         localidad_data = validated_data.pop('localidad', None)
         if localidad_data:
-            if isinstance(localidad_data, dict):
-                localidad_id = localidad_data.get('id')
-            else:
-                localidad_id = localidad_data
-            instance.localidad_id = localidad_id
+            instance.localidad = localidad_data
+
+        # Manejar zonas de interés si están presentes
+        if 'zonas_de_interes' in validated_data:
+            instance.zonas_de_interes.set(validated_data.pop('zonas_de_interes'))
 
         # Actualizar los demás campos
         for attr, value in validated_data.items():
@@ -143,6 +144,15 @@ class BarrioModelSerializer(serializers.ModelSerializer):
 
         instance.save()
         return instance
+
+    def to_representation(self, instance):
+        representation = super().to_representation(instance)
+        
+        # Asegurarse de que localidad sea el ID en la respuesta
+        if isinstance(representation.get('localidad'), dict):
+            representation['localidad'] = representation['localidad']['id']
+            
+        return representation
 
 class ZonaModelSerializer(serializers.ModelSerializer):
     class Meta:
@@ -176,7 +186,7 @@ class EdificioModelSerializer(serializers.ModelSerializer):
             'descripcion', 'direccion', 'estrato', 
             'telefono', 'barrio', 'barrio_nombre',
             'multimedia', 'zonas_de_interes', 'zonas_de_interes_ids',
-            'amenidades', 'amenidades_ids'
+            'amenidades', 'amenidades_ids', 'tipo_edificio', 'estado'
         ]
 
     def to_representation(self, instance):

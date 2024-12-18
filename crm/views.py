@@ -326,6 +326,49 @@ class BarrioModelViewSet(viewsets.ModelViewSet):
                 status=status.HTTP_400_BAD_REQUEST
             )
 
+    @action(detail=True, methods=['POST'], url_path='agregar-zona-interes')
+    def agregar_zona_interes(self, request, pk=None):
+        try:
+            barrio = self.get_object()
+            zona_id = request.data.get('zona_id')
+            
+            if not zona_id:
+                return Response(
+                    {'error': 'Se requiere el ID de la zona de interés'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+
+            zona = ZonasDeInteresModel.objects.get(id=zona_id)
+            barrio.zonas_de_interes.add(zona)
+            
+            serializer = self.get_serializer(barrio)
+            return Response(serializer.data)
+        except ZonasDeInteresModel.DoesNotExist:
+            return Response(
+                {'error': 'Zona de interés no encontrada'},
+                status=status.HTTP_404_NOT_FOUND
+            )
+        except Exception as e:
+            return Response(
+                {'error': str(e)},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+    @action(detail=True, methods=['DELETE'], url_path='eliminar-zona-interes/(?P<zona_id>[^/.]+)')
+    def eliminar_zona_interes(self, request, pk=None, zona_id=None):
+        try:
+            barrio = self.get_object()
+            zona = ZonasDeInteresModel.objects.get(id=zona_id)
+            barrio.zonas_de_interes.remove(zona)
+            
+            serializer = self.get_serializer(barrio)
+            return Response(serializer.data)
+        except Exception as e:
+            return Response(
+                {'error': str(e)},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
 class ZonaModelViewSet(viewsets.ModelViewSet):
     queryset = ZonaModel.objects.all()
     serializer_class = ZonaModelSerializer
@@ -480,6 +523,28 @@ class EdificioModelViewSet(viewsets.ModelViewSet):
             return Response(serializer.data)
         except Exception as e:
             print("Error en update:", str(e))
+            return Response(
+                {'error': str(e)},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+    @action(detail=True, methods=['DELETE'], url_path='multimedia/(?P<multimedia_id>[^/.]+)')
+    def eliminar_multimedia(self, request, pk=None, multimedia_id=None):
+        try:
+            edificio = self.get_object()
+            multimedia = MultimediaModel.objects.get(
+                id=multimedia_id,
+                content_type=ContentType.objects.get_for_model(edificio),
+                object_id=edificio.id
+            )
+            multimedia.delete()
+            return Response(status=status.HTTP_204_NO_CONTENT)
+        except MultimediaModel.DoesNotExist:
+            return Response(
+                {'error': 'Multimedia no encontrada'},
+                status=status.HTTP_404_NOT_FOUND
+            )
+        except Exception as e:
             return Response(
                 {'error': str(e)},
                 status=status.HTTP_400_BAD_REQUEST
