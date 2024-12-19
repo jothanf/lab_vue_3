@@ -628,47 +628,24 @@ class PropiedadModelViewSet(viewsets.ModelViewSet):
             )
 
     def update(self, request, *args, **kwargs):
-        try:
-            print("\n=== Actualizando propiedad ===")
-            print("Datos recibidos:", request.data)
-            
-            instance = self.get_object()
-            
-            # Convertir los campos numéricos si vienen como strings
-            numeric_fields = ['metro_cuadrado_construido', 'metro_cuadrado_propiedad', 
-                             'habitaciones', 'banos', 'valor_administracion', 
-                             'valor_predial', 'estrato']
-            
-            data = request.data.copy()
-            for field in numeric_fields:
-                if field in data and data[field]:
-                    try:
-                        data[field] = int(data[field])
-                    except (ValueError, TypeError):
-                        data[field] = None
+        instance = self.get_object()
+        serializer = self.get_serializer(instance, data=request.data, partial=True)
+        serializer.is_valid(raise_exception=True)
+        
+        # Guardar la instancia
+        self.perform_update(serializer)
 
-            serializer = self.get_serializer(instance, data=data, partial=True)
-            
-            if not serializer.is_valid():
-                print("Errores de validación:", serializer.errors)
-                return Response(
-                    serializer.errors,
-                    status=status.HTTP_400_BAD_REQUEST
-                )
+        # Manejar las amenidades
+        amenidades_ids = request.data.get('amenidades_ids', [])
+        print(f"Amenidades IDs recibidos: {amenidades_ids}")  # Debug log
+        
+        if amenidades_ids is not None:
+            instance.amenidades.set(amenidades_ids)
+            print(f"Amenidades actualizadas: {instance.amenidades.all()}")  # Debug log
 
-            propiedad = serializer.save()
-            print("Propiedad actualizada:", propiedad)
-
-            # Obtener la instancia actualizada con todas las relaciones
-            updated_serializer = self.get_serializer(propiedad)
-            return Response(updated_serializer.data)
-
-        except Exception as e:
-            print(f"Error al actualizar: {str(e)}")
-            return Response(
-                {'error': str(e)},
-                status=status.HTTP_400_BAD_REQUEST
-            )
+        # Obtener la instancia actualizada
+        serializer = self.get_serializer(instance)
+        return Response(serializer.data)
 
     @action(detail=True, methods=['POST'])
     def agregar_imagen(self, request, pk=None):
