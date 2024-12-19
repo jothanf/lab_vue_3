@@ -576,13 +576,18 @@ class PropiedadModelViewSet(viewsets.ModelViewSet):
             context={'request': request}
         ).data
         
+        # Obtener edificios disponibles
+        edificios = EdificioModel.objects.all()
+        edificios_serializer = EdificioModelSerializer(edificios, many=True).data
+        
         return Response({
             'propiedad': serializer.data,
             'amenidades_disponibles': AmenidadesModelSerializer(
                 AmenidadesModel.objects.all(), 
                 many=True
             ).data,
-            'multimedia': multimedia_serializer
+            'multimedia': multimedia_serializer,
+            'edificios_disponibles': edificios_serializer  # Agregar edificios disponibles
         })
 
     def create(self, request, *args, **kwargs):

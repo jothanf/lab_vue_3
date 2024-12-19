@@ -227,6 +227,13 @@ class EdificioModelSerializer(serializers.ModelSerializer):
 class PropiedadModelSerializer(serializers.ModelSerializer):
     amenidades = AmenidadesModelSerializer(many=True, read_only=True)
     multimedia = MultimediaModelSerializer(many=True, read_only=True)
+    edificio = EdificioModelSerializer(read_only=True)  # Para lectura
+    edificio_id = serializers.PrimaryKeyRelatedField(  # Para escritura
+        source='edificio',
+        queryset=EdificioModel.objects.all(),
+        required=False,
+        allow_null=True
+    )
     
     class Meta:
         model = PropiedadModel
@@ -246,12 +253,30 @@ class PropiedadModelSerializer(serializers.ModelSerializer):
             object_id=instance.id
         )
         representation['multimedia'] = MultimediaModelSerializer(multimedia, many=True).data
-        print("Multimedia encontrada:", representation['multimedia'])
+        
+        # Log para verificar el edificio
+        print("Edificio en la instancia:", instance.edificio)
+        if instance.edificio:
+            representation['edificio'] = EdificioModelSerializer(instance.edificio).data
+            print("Edificio serializado:", representation['edificio'])
+        
         return representation
 
     def validate(self, data):
         print("\n=== Validación del Serializador ===")
         print("Datos entrantes completos:", self.initial_data)
+        
+        # Validar edificio
+        edificio_id = self.initial_data.get('edificio')
+        if edificio_id:
+            try:
+                edificio = EdificioModel.objects.get(id=edificio_id)
+                data['edificio'] = edificio
+                print(f"Edificio validado: {edificio}")
+            except EdificioModel.DoesNotExist:
+                raise serializers.ValidationError({
+                    'edificio': f"No existe un edificio con el ID {edificio_id}"
+                })
         
         propietario_id = self.initial_data.get('propietario')
         if not propietario_id:
@@ -277,16 +302,6 @@ class PropiedadModelSerializer(serializers.ModelSerializer):
                     'agente': f"No existe un agente con el ID {agente_id}"
                 })
             
-        edificio_id = self.initial_data.get('edificio')
-        if edificio_id:
-            try:
-                edificio = EdificioModel.objects.get(id=edificio_id)
-                data['edificio'] = edificio
-            except EdificioModel.DoesNotExist:
-                raise serializers.ValidationError({
-                    'edificio': f"No existe un edificio con el ID {edificio_id}"
-                })
-
         print("Datos finales validados:", data)
         return data
 
