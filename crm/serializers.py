@@ -1,6 +1,7 @@
 from rest_framework import serializers
 from .models import AmenidadesModel, CaracteristicasInterioresModel, ZonasDeInteresModel, LocalidadModel, BarrioModel, ZonaModel, EdificioModel, PropiedadModel, AgenteModel, ClienteModel, MultimediaModel, RequerimientoModel, TareaModel, FaseSeguimientoModel
 import json
+from accounts.serializers import ClienteSerializer
 
 class MultimediaModelSerializer(serializers.ModelSerializer):
     archivo_url = serializers.SerializerMethodField()
@@ -234,7 +235,8 @@ class PropiedadModelSerializer(serializers.ModelSerializer):
         required=False,
         allow_null=True
     )
-    
+    propietario = ClienteSerializer(read_only=True)
+
     class Meta:
         model = PropiedadModel
         fields = '__all__'
