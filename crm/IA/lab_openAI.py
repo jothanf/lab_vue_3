@@ -1,6 +1,7 @@
 from openai import OpenAI
 import os
 from dotenv import load_dotenv
+import base64
 
 load_dotenv()
 
@@ -73,4 +74,60 @@ class AIService:
         if modalidad.get('renta_tradicional', {}).get('activo'):
             modes.append(f"Renta por ${modalidad['renta_tradicional']['precio']}")
         return ' y '.join(modes) if modes else 'No especificada'
+    
+    def analyze_image(self, image_path, analysis_type="ocr"):
+        prompt_one = [
+            "Eres un experto analista inmobiliario con amplia experiencia en valoración de propiedades. Tu tarea es analizar detalladamente la imagen proporcionada y generar una descripción profesional y cautivadora.",
+            "IDENTIFICACIÓN INICIAL: Identifica el tipo de espacio o elemento mostrado en la imagen, determina su función principal dentro de la propiedad, observa el contexto general del espacio.",
+            "ANÁLISIS DETALLADO: Describe las características físicas principales, identifica materiales visibles y acabados, analiza la iluminación y espacialidad, detecta elementos destacables o únicos, observa el estado de conservación, identifica cualquier elemento de valor agregado.",
+            "ELEMENTOS DE CONFORT Y FUNCIONALIDAD: Evalúa la disposición del espacio, identifica elementos que mejoren la habitabilidad, observa características de confort, detecta elementos de automatización o tecnología si están presentes."
+        ]
+        try:
+            with open(image_path, "rb") as image_file:
+                base64_image = base64.b64encode(image_file.read()).decode()
+                
+                # Diferentes prompts según el tipo de análisis
+                if analysis_type == "ocr":
+                    system_prompt = """Tu única tarea es extraer y transcribir el texto que aparece en la imagen.
+                    Solo devuelve el texto encontrado, sin descripciones ni interpretaciones.
+                    Si hay números telefónicos, direcciones, nombres o cualquier otro texto, simplemente transcríbelo.
+                    No describas la imagen ni su contenido visual."""
+                    
+                    user_prompt = "Extrae y transcribe todo el texto que veas en esta imagen, incluyendo números y caracteres especiales:"
+                else:  # analysis_type == "property"
+                    system_prompt = prompt_one
+                    
+                    user_prompt = "Describe detalladamente esta propiedad desde un punto de vista inmobiliario:"
+                
+                response = self.client.chat.completions.create(
+                    model="gpt-4o-mini",
+                    messages=[
+                        {
+                            "role": "system",
+                            "content": "\n".join(prompt_one)
+                        },
+                        {
+                            "role": "user",
+                            "content": [
+                                {
+                                    "type": "text",
+                                    "text": user_prompt
+                                },
+                                {
+                                    "type": "image_url",
+                                    "image_url": {
+                                        "url": f"data:image/jpeg;base64,{base64_image}",
+                                        "detail": "high"
+                                    }
+                                }
+                            ]
+                        }
+                    ],
+                    max_tokens=500
+                )
+                
+                return response.choices[0].message.content
+        except Exception as e:
+            print(f"Error al analizar la imagen: {str(e)}")
+            return "Error al analizar la imagen"
     

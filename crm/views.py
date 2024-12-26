@@ -778,7 +778,7 @@ def transcribe_audio(request):
                 status=status.HTTP_400_BAD_REQUEST
             )
 
-        # Crear un archivo temporal
+        # Guardar el archivo temporalmente
         with tempfile.NamedTemporaryFile(delete=False, suffix='.webm') as temp_audio:
             for chunk in audio_file.chunks():
                 temp_audio.write(chunk)
@@ -789,11 +789,11 @@ def transcribe_audio(request):
             ai_service = AIService()
             result = ai_service.client.audio.transcriptions.create(
                 model="whisper-1",
-                file=open(temp_audio_path, "rb"),
-                response_format="text"
+                file=open(temp_audio_path, "rb")
             )
 
-            return Response({'text': result})
+            # Modificación aquí: accedemos al texto directamente
+            return Response({'text': result.text})  # Cambiamos result por result.text
 
         finally:
             # Limpiar el archivo temporal
@@ -804,6 +804,40 @@ def transcribe_audio(request):
 
     except Exception as e:
         print(f"Error en transcribe_audio: {str(e)}")
+        return Response(
+            {'error': str(e)},
+            status=status.HTTP_500_INTERNAL_SERVER_ERROR
+        )
+
+@api_view(['POST'])
+def analyze_image(request):
+    try:
+        image_file = request.FILES.get('image')
+        analysis_type = request.POST.get('analysis_type', 'ocr')  # 'ocr' o 'property'
+        
+        if not image_file:
+            return Response(
+                {'error': 'No se proporcionó archivo de imagen'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        with tempfile.NamedTemporaryFile(delete=False, suffix='.jpg') as temp_image:
+            for chunk in image_file.chunks():
+                temp_image.write(chunk)
+            temp_image_path = temp_image.name
+
+        try:
+            ai_service = AIService()
+            result = ai_service.analyze_image(temp_image_path, analysis_type)
+            return Response({'text': result})
+        finally:
+            try:
+                os.unlink(temp_image_path)
+            except Exception as e:
+                print(f"Error al eliminar archivo temporal: {e}")
+
+    except Exception as e:
+        print(f"Error en analyze_image: {str(e)}")
         return Response(
             {'error': str(e)},
             status=status.HTTP_500_INTERNAL_SERVER_ERROR
