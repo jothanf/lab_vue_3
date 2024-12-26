@@ -1,6 +1,6 @@
 from django.urls import path, include
 from rest_framework.routers import DefaultRouter
-from .views import AmenidadesModelViewSet, CaracteristicasInterioresModelViewSet, ZonasDeInteresModelViewSet, LocalidadModelViewSet, BarrioModelViewSet, ZonaModelViewSet, EdificioModelViewSet, PropiedadModelViewSet, RequerimientoModelViewSet, TareaModelViewSet, transcribe_audio, analyze_image
+from .views import AmenidadesModelViewSet, CaracteristicasInterioresModelViewSet, ZonasDeInteresModelViewSet, LocalidadModelViewSet, BarrioModelViewSet, ZonaModelViewSet, EdificioModelViewSet, PropiedadModelViewSet, RequerimientoModelViewSet, TareaModelViewSet, transcribe_audio, analyze_image, PuntoDeInteresModelViewSet
 from django.conf import settings
 from django.conf.urls.static import static
 
@@ -15,6 +15,7 @@ router.register(r'edificios', EdificioModelViewSet)
 router.register(r'propiedades', PropiedadModelViewSet)
 router.register(r'requerimientos', RequerimientoModelViewSet)
 router.register(r'tareas', TareaModelViewSet)
+router.register(r'puntos-de-interes', PuntoDeInteresModelViewSet)
 
 
 urlpatterns = [

@@ -1,7 +1,7 @@
 from django.shortcuts import render
 from rest_framework import viewsets
-from .models import AmenidadesModel, CaracteristicasInterioresModel, ZonasDeInteresModel, LocalidadModel, BarrioModel, ZonaModel, EdificioModel, PropiedadModel, MultimediaModel, RequerimientoModel, TareaModel, FaseSeguimientoModel, AIQueryModel
-from .serializers import AmenidadesModelSerializer, CaracteristicasInterioresModelSerializer, ZonasDeInteresModelSerializer, LocalidadModelSerializer, BarrioModelSerializer, ZonaModelSerializer, EdificioModelSerializer, PropiedadModelSerializer, MultimediaModelSerializer, RequerimientoModelSerializer, TareaModelSerializer, FaseSeguimientoModelSerializer
+from .models import AmenidadesModel, CaracteristicasInterioresModel, ZonasDeInteresModel, LocalidadModel, BarrioModel, ZonaModel, EdificioModel, PropiedadModel, MultimediaModel, RequerimientoModel, TareaModel, FaseSeguimientoModel, AIQueryModel, puntoDeInteresModel
+from .serializers import AmenidadesModelSerializer, CaracteristicasInterioresModelSerializer, ZonasDeInteresModelSerializer, LocalidadModelSerializer, BarrioModelSerializer, ZonaModelSerializer, EdificioModelSerializer, PropiedadModelSerializer, MultimediaModelSerializer, RequerimientoModelSerializer, TareaModelSerializer, FaseSeguimientoModelSerializer, PuntoDeInteresModelSerializer
 from rest_framework.response import Response
 from rest_framework import status
 import json
@@ -60,7 +60,7 @@ class CaracteristicasInterioresModelViewSet(viewsets.ModelViewSet):
 class ZonasDeInteresModelViewSet(viewsets.ModelViewSet):
     queryset = ZonasDeInteresModel.objects.all()
     serializer_class = ZonasDeInteresModelSerializer
-    parser_classes = (MultiPartParser, FormParser)
+    parser_classes = (MultiPartParser, FormParser, JSONParser)
 
     def get_serializer_context(self):
         context = super().get_serializer_context()
@@ -105,12 +105,123 @@ class ZonasDeInteresModelViewSet(viewsets.ModelViewSet):
     def update(self, request, *args, **kwargs):
         try:
             instance = self.get_object()
-            serializer = self.get_serializer(instance, data=request.data, partial=True)
+            data = request.data.copy()
+            
+            # Log para debugging
+            print("Datos recibidos:", data)
+            
+            # Actualizar puntos de interés si se proporcionan
+            if 'puntos_de_interes' in data:
+                try:
+                    puntos_ids = json.loads(data['puntos_de_interes'])
+                    print("Puntos de interés IDs:", puntos_ids)  # Log para debugging
+                    instance.puntos_de_interes.set(puntos_ids)
+                except json.JSONDecodeError as e:
+                    print("Error al decodificar JSON:", str(e))  # Log para debugging
+                    return Response(
+                        {'error': f'Error en formato JSON: {str(e)}'},
+                        status=status.HTTP_400_BAD_REQUEST
+                    )
+
+            # Actualizar otros campos
+            serializer = self.get_serializer(instance, data=data, partial=True)
             serializer.is_valid(raise_exception=True)
-            zona_de_interes = serializer.save()
+            self.perform_update(serializer)
+            
+            # Manejar nueva multimedia
+            multimedia_files = request.FILES.getlist('multimedia')
+            if multimedia_files:
+                content_type = ContentType.objects.get_for_model(instance)
+                for archivo in multimedia_files:
+                    MultimediaModel.objects.create(
+                        content_type=content_type,
+                        object_id=instance.id,
+                        archivo=archivo,
+                        tipo='foto'
+                    )
+            
             return Response(serializer.data)
         except Exception as e:
-            return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
+            print("Error en update:", str(e))  # Log para debugging
+            return Response(
+                {'error': str(e)},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+    def create(self, request, *args, **kwargs):
+        try:
+            data = request.data.copy()
+            
+            # Extraer puntos de interés si existen
+            puntos_de_interes = []
+            if 'puntos_de_interes' in data:
+                puntos_de_interes = json.loads(data.pop('puntos_de_interes'))
+            
+            # Manejar archivos multimedia
+            multimedia_files = request.FILES.getlist('multimedia')
+            
+            # Crear el serializer con el contexto necesario
+            serializer = self.get_serializer(
+                data=data,
+                context={
+                    'request': request,
+                    'puntos_de_interes': puntos_de_interes,
+                    'multimedia_files': multimedia_files
+                }
+            )
+            
+            serializer.is_valid(raise_exception=True)
+            self.perform_create(serializer)
+            
+            return Response(serializer.data, status=status.HTTP_201_CREATED)
+        except Exception as e:
+            return Response(
+                {'error': str(e)},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+    def update(self, request, *args, **kwargs):
+        try:
+            instance = self.get_object()
+            data = request.data.copy()
+            
+            # Actualizar puntos de interés si se proporcionan
+            if 'puntos_de_interes' in data:
+                try:
+                    puntos_ids = json.loads(data['puntos_de_interes'])
+                    print("Puntos de interés IDs:", puntos_ids)  # Log para debugging
+                    instance.puntos_de_interes.set(puntos_ids)
+                except json.JSONDecodeError as e:
+                    print("Error al decodificar JSON:", str(e))  # Log para debugging
+                    return Response(
+                        {'error': f'Error en formato JSON: {str(e)}'},
+                        status=status.HTTP_400_BAD_REQUEST
+                    )
+
+            # Actualizar otros campos
+            serializer = self.get_serializer(instance, data=data, partial=True)
+            serializer.is_valid(raise_exception=True)
+            self.perform_update(serializer)
+            
+            # Manejar nueva multimedia
+            multimedia_files = request.FILES.getlist('multimedia')
+            if multimedia_files:
+                content_type = ContentType.objects.get_for_model(instance)
+                for archivo in multimedia_files:
+                    MultimediaModel.objects.create(
+                        content_type=content_type,
+                        object_id=instance.id,
+                        archivo=archivo,
+                        tipo='foto'
+                    )
+            
+            return Response(serializer.data)
+        except Exception as e:
+            print("Error en update:", str(e))  # Log para debugging
+            return Response(
+                {'error': str(e)},
+                status=status.HTTP_400_BAD_REQUEST
+            )
 
 class LocalidadModelViewSet(viewsets.ModelViewSet):
     queryset = LocalidadModel.objects.all()
@@ -842,3 +953,86 @@ def analyze_image(request):
             {'error': str(e)},
             status=status.HTTP_500_INTERNAL_SERVER_ERROR
         )
+
+class PuntoDeInteresModelViewSet(viewsets.ModelViewSet):
+    queryset = puntoDeInteresModel.objects.all()
+    serializer_class = PuntoDeInteresModelSerializer
+    parser_classes = (MultiPartParser, FormParser)
+
+    def get_serializer_context(self):
+        context = super().get_serializer_context()
+        context['request'] = self.request
+        return context
+
+    def create(self, request, *args, **kwargs):
+        try:
+            # Obtener los datos básicos
+            data = request.data.copy()
+            
+            # Crear el punto de interés
+            serializer = self.get_serializer(data=data)
+            serializer.is_valid(raise_exception=True)
+            punto = serializer.save()
+
+            # Manejar archivos multimedia
+            multimedia_files = request.FILES.getlist('multimedia')
+            for archivo in multimedia_files:
+                MultimediaModel.objects.create(
+                    content_type=ContentType.objects.get_for_model(punto),
+                    object_id=punto.id,
+                    archivo=archivo,
+                    tipo='foto'  # o determinar el tipo según el archivo
+                )
+
+            # Obtener el objeto actualizado con toda la multimedia
+            serializer = self.get_serializer(punto)
+            return Response(serializer.data, status=status.HTTP_201_CREATED)
+
+        except Exception as e:
+            return Response(
+                {'error': str(e)},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+    @action(detail=True, methods=['POST'])
+    def agregar_multimedia(self, request, pk=None):
+        try:
+            punto = self.get_object()
+            archivo = request.FILES.get('archivo')
+            titulo = request.data.get('titulo', '')
+            descripcion = request.data.get('descripcion', '')
+            tipo = request.data.get('tipo', 'foto')
+
+            multimedia = MultimediaModel.objects.create(
+                content_type=ContentType.objects.get_for_model(punto),
+                object_id=punto.id,
+                archivo=archivo,
+                titulo=titulo,
+                descripcion=descripcion,
+                tipo=tipo
+            )
+
+            serializer = self.get_serializer(punto)
+            return Response(serializer.data)
+        except Exception as e:
+            return Response(
+                {'error': str(e)},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+    @action(detail=True, methods=['DELETE'], url_path='multimedia/(?P<multimedia_id>[^/.]+)')
+    def eliminar_multimedia(self, request, pk=None, multimedia_id=None):
+        try:
+            punto = self.get_object()
+            multimedia = MultimediaModel.objects.get(
+                content_type=ContentType.objects.get_for_model(punto),
+                object_id=punto.id,
+                id=multimedia_id
+            )
+            multimedia.delete()
+            return Response(status=status.HTTP_204_NO_CONTENT)
+        except MultimediaModel.DoesNotExist:
+            return Response(
+                {'error': 'Multimedia no encontrada'},
+                status=status.HTTP_404_NOT_FOUND
+            )

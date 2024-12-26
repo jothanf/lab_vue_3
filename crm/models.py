@@ -23,8 +23,20 @@ class ZonasDeInteresModel(models.Model):
     categoria = models.CharField(max_length=50)
     descripcion = models.TextField(blank=True, null=True)
     ubicacion = models.JSONField(null=True, blank=True)
+    icono = models.ImageField(upload_to='iconos/zonas/', blank=True, null=True)
+    multimedia = GenericRelation('MultimediaModel', related_query_name='zona_de_interes')
+    puntos_de_interes = models.ManyToManyField('puntoDeInteresModel', blank=True)
+
+    def __str__(self):
+        return self.nombre
+    
+class puntoDeInteresModel(models.Model):
+    nombre = models.CharField(max_length=100)
+    categoria = models.CharField(max_length=50)
+    descripcion = models.TextField(blank=True, null=True)
+    ubicacion = models.JSONField(null=True, blank=True)
     direccion = models.CharField(max_length=200, blank=True, null=True)
-    multimedia = GenericRelation('MultimediaModel')
+    multimedia = GenericRelation('MultimediaModel', related_query_name='punto_de_interes')
     icono = models.ImageField(upload_to='iconos/zonas/', blank=True, null=True)
 
     def __str__(self):

@@ -1,7 +1,8 @@
 from rest_framework import serializers
-from .models import AmenidadesModel, CaracteristicasInterioresModel, ZonasDeInteresModel, LocalidadModel, BarrioModel, ZonaModel, EdificioModel, PropiedadModel, AgenteModel, ClienteModel, MultimediaModel, RequerimientoModel, TareaModel, FaseSeguimientoModel
+from .models import AmenidadesModel, CaracteristicasInterioresModel, ZonasDeInteresModel, LocalidadModel, BarrioModel, ZonaModel, EdificioModel, PropiedadModel, AgenteModel, ClienteModel, MultimediaModel, RequerimientoModel, TareaModel, FaseSeguimientoModel, puntoDeInteresModel
 import json
 from accounts.serializers import ClienteSerializer
+from django.contrib.contenttypes.models import ContentType
 
 class MultimediaModelSerializer(serializers.ModelSerializer):
     archivo_url = serializers.SerializerMethodField()
@@ -37,13 +38,14 @@ class CaracteristicasInterioresModelSerializer(serializers.ModelSerializer):
         model = CaracteristicasInterioresModel
         fields = '__all__'  
 
-class ZonasDeInteresModelSerializer(serializers.ModelSerializer):
+class PuntoDeInteresModelSerializer(serializers.ModelSerializer):
     multimedia = MultimediaModelSerializer(many=True, read_only=True)
     icono_url = serializers.SerializerMethodField()
 
     class Meta:
-        model = ZonasDeInteresModel
-        fields = ['id', 'nombre', 'categoria', 'descripcion', 'ubicacion', 'multimedia', 'icono', 'icono_url', 'direccion']
+        model = puntoDeInteresModel
+        fields = ['id', 'nombre', 'categoria', 'descripcion', 'ubicacion', 
+                 'multimedia', 'icono', 'icono_url', 'direccion']
 
     def get_icono_url(self, obj):
         if obj.icono:
@@ -52,6 +54,69 @@ class ZonasDeInteresModelSerializer(serializers.ModelSerializer):
                 return request.build_absolute_uri(obj.icono.url)
             return obj.icono.url
         return None
+
+    def to_representation(self, instance):
+        representation = super().to_representation(instance)
+        
+        # Obtener multimedia del punto de interés
+        multimedia = MultimediaModel.objects.filter(
+            content_type__model='puntodeinteresmodel',
+            object_id=instance.id
+        )
+        
+        representation['multimedia'] = MultimediaModelSerializer(
+            multimedia, 
+            many=True,
+            context=self.context
+        ).data
+        
+        return representation
+
+class ZonasDeInteresModelSerializer(serializers.ModelSerializer):
+    multimedia = MultimediaModelSerializer(many=True, read_only=True)
+    icono_url = serializers.SerializerMethodField()
+    puntos_de_interes = PuntoDeInteresModelSerializer(many=True, read_only=True)
+    
+    class Meta:
+        model = ZonasDeInteresModel
+        fields = ['id', 'nombre', 'categoria', 'descripcion', 'ubicacion', 
+                 'multimedia', 'icono', 'icono_url', 'puntos_de_interes']
+
+    def get_icono_url(self, obj):
+        if obj.icono:
+            request = self.context.get('request')
+            if request:
+                return request.build_absolute_uri(obj.icono.url)
+        return None
+
+    def update(self, instance, validated_data):
+        request = self.context.get('request')
+        
+        # Manejar puntos de interés
+        if request and 'puntos_de_interes' in request.data:
+            try:
+                puntos_ids = json.loads(request.data['puntos_de_interes'])
+                instance.puntos_de_interes.set(puntos_ids)
+            except (json.JSONDecodeError, ValueError) as e:
+                raise serializers.ValidationError({'puntos_de_interes': str(e)})
+
+        # Manejar ubicación
+        if 'ubicacion' in validated_data:
+            try:
+                if isinstance(validated_data['ubicacion'], str):
+                    instance.ubicacion = json.loads(validated_data['ubicacion'])
+                else:
+                    instance.ubicacion = validated_data['ubicacion']
+            except json.JSONDecodeError as e:
+                raise serializers.ValidationError({'ubicacion': str(e)})
+
+        # Actualizar campos básicos
+        for attr, value in validated_data.items():
+            if attr not in ['puntos_de_interes', 'ubicacion']:
+                setattr(instance, attr, value)
+
+        instance.save()
+        return instance
 
 class LocalidadModelSerializer(serializers.ModelSerializer):
     multimedia = MultimediaModelSerializer(many=True, read_only=True)
