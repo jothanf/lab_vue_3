@@ -1,15 +1,18 @@
 from django.shortcuts import render
 from rest_framework import viewsets
-from .models import AmenidadesModel, CaracteristicasInterioresModel, ZonasDeInteresModel, LocalidadModel, BarrioModel, ZonaModel, EdificioModel, PropiedadModel, MultimediaModel, RequerimientoModel, TareaModel, FaseSeguimientoModel
+from .models import AmenidadesModel, CaracteristicasInterioresModel, ZonasDeInteresModel, LocalidadModel, BarrioModel, ZonaModel, EdificioModel, PropiedadModel, MultimediaModel, RequerimientoModel, TareaModel, FaseSeguimientoModel, AIQueryModel
 from .serializers import AmenidadesModelSerializer, CaracteristicasInterioresModelSerializer, ZonasDeInteresModelSerializer, LocalidadModelSerializer, BarrioModelSerializer, ZonaModelSerializer, EdificioModelSerializer, PropiedadModelSerializer, MultimediaModelSerializer, RequerimientoModelSerializer, TareaModelSerializer, FaseSeguimientoModelSerializer
 from rest_framework.response import Response
 from rest_framework import status
 import json
 from accounts.models import AgenteModel
 from django.contrib.contenttypes.models import ContentType
-from rest_framework.decorators import action
+from rest_framework.decorators import action, api_view
 from rest_framework.parsers import MultiPartParser, FormParser, JSONParser
 import logging
+from .IA.lab_openAI import AIService
+import tempfile
+import os
 
 logger = logging.getLogger(__name__)
 
@@ -685,6 +688,31 @@ class PropiedadModelViewSet(viewsets.ModelViewSet):
                 status=status.HTTP_400_BAD_REQUEST
             )
 
+    @action(detail=True, methods=['POST'])
+    def generate_ai_description(self, request, pk=None):
+        try:
+            propiedad = self.get_object()
+            ai_service = AIService()
+            
+            # Serializar la propiedad para enviar a OpenAI
+            serializer = self.get_serializer(propiedad)
+            result = ai_service.generate_property_description(serializer.data)
+            
+            if result["success"]:
+                return Response({
+                    "description": result["description"]
+                })
+            else:
+                return Response(
+                    {"error": result["error"]},
+                    status=status.HTTP_500_INTERNAL_SERVER_ERROR
+                )
+        except Exception as e:
+            return Response(
+                {"error": str(e)},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
 class RequerimientoModelViewSet(viewsets.ModelViewSet):
     queryset = RequerimientoModel.objects.all()
     serializer_class = RequerimientoModelSerializer
@@ -739,3 +767,44 @@ class TareaModelViewSet(viewsets.ModelViewSet):
             'tarea': serializer.data,
             'seguimientos': seguimientos_serializer
         })
+
+@api_view(['POST'])
+def transcribe_audio(request):
+    try:
+        audio_file = request.FILES.get('audio')
+        if not audio_file:
+            return Response(
+                {'error': 'No se proporcionó archivo de audio'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        # Crear un archivo temporal
+        with tempfile.NamedTemporaryFile(delete=False, suffix='.webm') as temp_audio:
+            for chunk in audio_file.chunks():
+                temp_audio.write(chunk)
+            temp_audio_path = temp_audio.name
+
+        try:
+            # Usar el servicio AI para transcribir
+            ai_service = AIService()
+            result = ai_service.client.audio.transcriptions.create(
+                model="whisper-1",
+                file=open(temp_audio_path, "rb"),
+                response_format="text"
+            )
+
+            return Response({'text': result})
+
+        finally:
+            # Limpiar el archivo temporal
+            try:
+                os.unlink(temp_audio_path)
+            except Exception as e:
+                print(f"Error al eliminar archivo temporal: {e}")
+
+    except Exception as e:
+        print(f"Error en transcribe_audio: {str(e)}")
+        return Response(
+            {'error': str(e)},
+            status=status.HTTP_500_INTERNAL_SERVER_ERROR
+        )

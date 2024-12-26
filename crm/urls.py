@@ -1,6 +1,6 @@
 from django.urls import path, include
 from rest_framework.routers import DefaultRouter
-from .views import AmenidadesModelViewSet, CaracteristicasInterioresModelViewSet, ZonasDeInteresModelViewSet, LocalidadModelViewSet, BarrioModelViewSet, ZonaModelViewSet, EdificioModelViewSet, PropiedadModelViewSet, RequerimientoModelViewSet, TareaModelViewSet
+from .views import AmenidadesModelViewSet, CaracteristicasInterioresModelViewSet, ZonasDeInteresModelViewSet, LocalidadModelViewSet, BarrioModelViewSet, ZonaModelViewSet, EdificioModelViewSet, PropiedadModelViewSet, RequerimientoModelViewSet, TareaModelViewSet, transcribe_audio
 from django.conf import settings
 from django.conf.urls.static import static
 
@@ -19,4 +19,5 @@ router.register(r'tareas', TareaModelViewSet)
 
 urlpatterns = [
     path('', include(router.urls)),
+    path('transcribe-audio/', transcribe_audio, name='transcribe-audio'),
 ] + static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)

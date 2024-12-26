@@ -12,6 +12,9 @@ class AmenidadesModel(models.Model):
 class CaracteristicasInterioresModel(models.Model):
     caracteristica = models.CharField(max_length=100)
     categoria = models.CharField(max_length=100)
+    tipo_propiedad = models.CharField(max_length=100, blank=True, null=True, help_text="""
+        apartamento, casa, lote
+    """)
     descripcion = models.TextField(blank=True, null=True)
     icono = models.ImageField(upload_to='iconos/caracteristicas/', blank=True, null=True)
 
@@ -186,12 +189,14 @@ class RequerimientoModel(models.Model):
     fecha_ingreso = models.DateTimeField(auto_now_add=True)
     tiempo_estadia = models.IntegerField(blank=True, null=True)
     tipo_negocio = models.JSONField()
+    presupuesto_minimo = models.DecimalField(max_digits=50, decimal_places=2, null=True, blank=True)
+    presupuesto_maximo = models.DecimalField(max_digits=50, decimal_places=2, null=True, blank=True)
+    presupuesto_minimo_compra = models.DecimalField(max_digits=50, decimal_places=2, null=True, blank=True)
+    presupuesto_maximo_compra = models.DecimalField(max_digits=50, decimal_places=2, null=True, blank=True)
     habitantes = models.IntegerField(default=0)
     area_minima = models.IntegerField(null=True, blank=True)
     area_maxima = models.IntegerField(null=True, blank=True)
     area_lote = models.IntegerField(null=True, blank=True)
-    presupuesto_minimo = models.DecimalField(max_digits=12, decimal_places=2, null=True, blank=True)
-    presupuesto_maximo = models.DecimalField(max_digits=12, decimal_places=2, null=True, blank=True)
     habitaciones = models.IntegerField(default=0)
     habitaciones_servicio = models.IntegerField(default=0)
     banos = models.IntegerField(default=0)
@@ -230,6 +235,8 @@ class RequerimientoModel(models.Model):
     fecha_ideal_entrega = models.DateTimeField(null=True, blank=True)
     informacion_legal_financiera = models.JSONField(blank=True, null=True)
     honorarios = models.JSONField(blank=True, null=True)
+    negocibles = models.TextField(blank=True, null=True)
+    no_negocibles = models.TextField(blank=True, null=True)
     comentarios = models.JSONField(blank=True, null=True)
 
     class Meta:
@@ -397,3 +404,25 @@ class FaseSeguimientoModel(models.Model):
 
     def __str__(self):
         return f'Fase {self.estado} - {self.tarea}'
+
+class AIQueryModel(models.Model):
+    QUERY_TYPES = [
+        ('description', 'Descripción de propiedad'),
+        ('voice', 'Transcripción de voz'),
+        ('image', 'Análisis de imagen'),
+    ]
+    
+    MODEL_TYPES = [
+        ('gpt-4o-mini', 'GPT-4o-mini'),
+        ('gpt-4', 'GPT-4'),
+        ('whisper', 'Whisper'),
+        ('dalle', 'DALL-E'),
+    ]
+    
+    query_type = models.CharField(max_length=20, choices=QUERY_TYPES)
+    model_type = models.CharField(max_length=20, choices=MODEL_TYPES)
+    input_data = models.JSONField()
+    output_data = models.JSONField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    status = models.CharField(max_length=20, default='pending')
+    error_message = models.TextField(null=True, blank=True)
