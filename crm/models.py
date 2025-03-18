@@ -197,8 +197,8 @@ class MultimediaModel(models.Model):
         return f"{self.get_tipo_display()} - {self.titulo}"
     
 class RequerimientoModel(models.Model):
-    agente = models.ForeignKey(AgenteModel, on_delete=models.CASCADE)
-    cliente = models.ForeignKey(ClienteModel, on_delete=models.CASCADE)
+    agente = models.ForeignKey(AgenteModel, on_delete=models.CASCADE, null=True, blank=True)
+    cliente = models.ForeignKey(ClienteModel, on_delete=models.CASCADE, null=True, blank=True)
     fecha_ingreso = models.DateTimeField(auto_now_add=True)
     tiempo_estadia = models.IntegerField(blank=True, null=True)
     tipo_negocio = models.JSONField()

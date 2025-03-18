@@ -9,7 +9,7 @@ from langchain_openai import ChatOpenAI
 load_dotenv()
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 
-def agent_tool(resumen=None):
+def agent_tool(resumen=None, cliente_id=29, agente_id=12):
     """
     Esta función:
       1. Recibe el resumen del requerimiento.
@@ -18,6 +18,8 @@ def agent_tool(resumen=None):
       
     Args:
         resumen (str, optional): Resumen generado previamente. Si es None, se generará uno nuevo.
+        cliente_id (int, optional): ID del cliente. Por defecto es 29.
+        agente_id (int, optional): ID del agente. Por defecto es 12.
     """
     # 1. Obtener el resumen
     if resumen is None:
@@ -25,11 +27,12 @@ def agent_tool(resumen=None):
         resumen = generar_resumen()
     
     print("Procesando resumen:\n", resumen)
+    print(f"Cliente ID: {cliente_id}, Agente ID: {agente_id}")
 
-    # 2. Generar un payload con valores predeterminados
+    # 2. Generar un payload con valores personalizados
     payload = {
-        "agente": 12,
-        "cliente": 29,
+        "agente": agente_id,
+        "cliente": cliente_id,
         "descripcion": resumen,
         "tipo_negocio": {"operacion": "", "tipo_propiedad": ""},
         "presupuesto_minimo_compra": None,

@@ -31,11 +31,23 @@ class AgenteInmobiliario:
         
         # Diccionario para almacenar las respuestas del usuario
         self.respuestas_usuario = {aspecto: None for aspecto in aspectos}
+        
+        # IDs para el requerimiento
+        self.cliente_id = 29  # Valor por defecto
+        self.agente_id = 12   # Valor por defecto
+    
+    def set_ids(self, cliente_id=None, agente_id=None):
+        """Establece los IDs de cliente y agente para este requerimiento"""
+        if cliente_id:
+            self.cliente_id = cliente_id
+        if agente_id:
+            self.agente_id = agente_id
     
     def reset(self):
         """Reinicia la conversación y las respuestas"""
         self.memory = ConversationBufferMemory(memory_key="history")
         self.respuestas_usuario = {aspecto: None for aspecto in aspectos}
+        # No reiniciamos los IDs, ya que son específicos de la sesión
     
     def proximo_aspecto(self):
         """Retorna el primer aspecto sin respuesta o None si todos están completos."""
@@ -159,7 +171,15 @@ class AgenteInmobiliario:
         """
         if confirmacion:
             resumen = self.generar_resumen()
-            exito, resultado = requerimientoTool.agent_tool(resumen)
+            
+            print(f"Confirmando resumen - Cliente ID: {self.cliente_id}, Agente ID: {self.agente_id}")
+            
+            # Pasamos los IDs al método agent_tool
+            exito, resultado = requerimientoTool.agent_tool(
+                resumen, 
+                cliente_id=self.cliente_id, 
+                agente_id=self.agente_id
+            )
             
             if exito:
                 return {

@@ -1228,7 +1228,27 @@ def requerimientoAgentView(request):
             data = json.loads(request.body)
             action = data.get('action', '')
             
+            # Mejorar el log para depuración
+            print(f"RequerimientoAgentView: Action={action}, Data={data}")
+            
+            # Verificar si se proporcionaron IDs de cliente y agente
             if action == 'iniciar':
+                # Obtener IDs (usar valores por defecto si no se proporcionan)
+                cliente_id = data.get('cliente_id', 29)
+                if cliente_id is None:
+                    print("Error: El ID del cliente es nulo. Usando valor por defecto: 29")
+                    cliente_id = 29
+                
+                agente_id = data.get('agente_id', 12)
+                if agente_id is None:
+                    print("Error: El ID del agente es nulo. Usando valor por defecto: 12")
+                    agente_id = 12
+                
+                print(f"Iniciando conversación con Cliente ID: {cliente_id}, Agente ID: {agente_id}")
+                
+                # Configurar los IDs en el agente
+                agente.set_ids(cliente_id=cliente_id, agente_id=agente_id)
+                
                 # Reiniciar el agente para una nueva conversación
                 agente.reset()
                 response = agente.procesar_mensaje('')
@@ -1253,7 +1273,8 @@ def requerimientoAgentView(request):
                 return JsonResponse({'error': 'Acción no reconocida'}, status=400)
                 
         except Exception as e:
-            return JsonResponse({'error': str(e)}, status=500)
+            print(f"Error al procesar la solicitud: {str(e)}")
+            return JsonResponse({'error': f"Error al procesar la solicitud: {str(e)}"}, status=500)
     
     return JsonResponse({'error': 'Método no permitido'}, status=405)
 
@@ -1270,7 +1291,7 @@ def requerimientoAIView(request):
         
         # Validar que los campos obligatorios estén presentes
         if 'agente' not in data or 'cliente' not in data:
-            print("Error: Los campos 'agente' y 'cliente' son obligatorios no están presentes.")
+            print("Error: Los campos 'agente' y 'cliente' son obligatorios y no están presentes.")
             return Response(
                 {"error": "Los campos 'agente' y 'cliente' son obligatorios"}, 
                 status=status.HTTP_400_BAD_REQUEST
@@ -1311,7 +1332,7 @@ def requerimientoAIView(request):
                 except ValueError:
                     print(f"Error: El campo '{field}' debe ser un número decimal.")
                     return Response(
-                        {"error": f"El campo '{field}' debe ser un número decimal"}, 
+                        {"error": f"El campo '{field}' debe ser un número decimal. Por favor, asegúrate de que el valor proporcionado sea un número válido."}, 
                         status=status.HTTP_400_BAD_REQUEST
                     )
         
@@ -1325,7 +1346,7 @@ def requerimientoAIView(request):
             return Response(serializer.data, status=status.HTTP_201_CREATED)
         
         print("Errores de validación en el serializer:", serializer.errors)
-        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+        return Response({"error": "Errores de validación en los datos proporcionados.", "detalles": serializer.errors}, status=status.HTTP_400_BAD_REQUEST)
     
     # Si es una solicitud GET, podríamos devolver un formulario o documentación
     print("Solicitud GET recibida. Instrucciones para el usuario.")
