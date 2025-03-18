@@ -40,3 +40,33 @@ class ClienteSerializer(serializers.ModelSerializer):
     class Meta:
         model = ClienteModel
         fields = '__all__'
+
+class ClienteRegistrationSerializer(serializers.ModelSerializer):
+    email = serializers.EmailField(required=True)
+    password = serializers.CharField(write_only=True, required=True)
+    
+    class Meta:
+        model = ClienteModel
+        fields = ('email', 'password', 'nombre', 'apellidos', 'telefono', 
+                  'telefono_secundario', 'cedula', 'canal_ingreso', 'estado_del_cliente')
+        
+    def create(self, validated_data):
+        email = validated_data.pop('email')
+        password = validated_data.pop('password')
+        
+        # Crear un usuario para el cliente
+        user = User.objects.create_user(
+            username=email,
+            email=email,
+            password=password,
+            first_name=validated_data.get('nombre', ''),
+            last_name=validated_data.get('apellidos', '')
+        )
+        
+        # Crear el cliente
+        cliente = ClienteModel.objects.create(
+            correo=email,
+            **validated_data
+        )
+        
+        return cliente

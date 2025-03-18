@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from .models import AmenidadesModel, CaracteristicasInterioresModel, ZonasDeInteresModel, LocalidadModel, BarrioModel, ZonaModel, EdificioModel, PropiedadModel, AgenteModel, ClienteModel, MultimediaModel, RequerimientoModel, TareaModel, FaseSeguimientoModel, puntoDeInteresModel
+from .models import AmenidadesModel, CaracteristicasInterioresModel, ZonasDeInteresModel, LocalidadModel, BarrioModel, ZonaModel, EdificioModel, PropiedadModel, AgenteModel, ClienteModel, MultimediaModel, RequerimientoModel, TareaModel, FaseSeguimientoModel, PuntoDeInteresModel, AgendaModel
 import json
 from accounts.serializers import ClienteSerializer
 from django.contrib.contenttypes.models import ContentType
@@ -43,7 +43,7 @@ class PuntoDeInteresModelSerializer(serializers.ModelSerializer):
     icono_url = serializers.SerializerMethodField()
 
     class Meta:
-        model = puntoDeInteresModel
+        model = PuntoDeInteresModel
         fields = ['id', 'nombre', 'categoria', 'descripcion', 'ubicacion', 
                  'multimedia', 'icono', 'icono_url', 'direccion']
 
@@ -120,11 +120,12 @@ class ZonasDeInteresModelSerializer(serializers.ModelSerializer):
 
 class LocalidadModelSerializer(serializers.ModelSerializer):
     multimedia = MultimediaModelSerializer(many=True, read_only=True)
-    zonas_de_interes = ZonasDeInteresModelSerializer(many=True, read_only=True)
+    puntos_de_interes = PuntoDeInteresModelSerializer(read_only=True)
+    zonas_de_interes = ZonasDeInteresModelSerializer(read_only=True)
 
     class Meta:
         model = LocalidadModel
-        fields = ['id', 'nombre', 'sigla', 'descripcion', 'multimedia', 'zonas_de_interes']
+        fields = ['id', 'nombre', 'sigla', 'descripcion', 'multimedia', 'zonas_de_interes', 'puntos_de_interes']
 
     def to_representation(self, instance):
         representation = super().to_representation(instance)
@@ -141,32 +142,58 @@ class LocalidadModelSerializer(serializers.ModelSerializer):
             context=self.context
         ).data
 
-        # Asegurarse de que las zonas de interés se serialicen correctamente
-        if hasattr(instance, 'zonas_de_interes'):
+        # Manejar zonas_de_interes como ForeignKey (no como colección)
+        if hasattr(instance, 'zonas_de_interes') and instance.zonas_de_interes is not None:
             representation['zonas_de_interes'] = ZonasDeInteresModelSerializer(
-                instance.zonas_de_interes.all(),
-                many=True,
+                instance.zonas_de_interes,
                 context=self.context
             ).data
+        else:
+            representation['zonas_de_interes'] = None
+            
+        # Manejar puntos_de_interes como ForeignKey (no como colección)
+        if hasattr(instance, 'puntos_de_interes') and instance.puntos_de_interes is not None:
+            representation['puntos_de_interes'] = PuntoDeInteresModelSerializer(
+                instance.puntos_de_interes,
+                context=self.context
+            ).data
+        else:
+            representation['puntos_de_interes'] = None
         
         return representation
 
     def update(self, instance, validated_data):
         # Obtener las zonas de interés del request data
-        zonas_ids = self.context['request'].data.get('zonas_de_interes', [])
+        zonas_id = self.context['request'].data.get('zonas_de_interes', None)
+        puntos_id = self.context['request'].data.get('puntos_de_interes', None)
         
         # Actualizar los campos básicos
         instance = super().update(instance, validated_data)
         
-        # Actualizar las zonas de interés
-        if zonas_ids:
-            # Convertir a lista si es string
-            if isinstance(zonas_ids, str):
-                zonas_ids = json.loads(zonas_ids)
-            # Limpiar y establecer nuevas zonas
-            instance.zonas_de_interes.clear()
-            instance.zonas_de_interes.add(*zonas_ids)
+        # Actualizar la zona de interés (como ForeignKey)
+        if zonas_id:
+            try:
+                # Si es un string, intentar convertir a entero
+                if isinstance(zonas_id, str):
+                    zonas_id = int(zonas_id)
+                zona = ZonasDeInteresModel.objects.get(id=zonas_id)
+                instance.zonas_de_interes = zona
+                instance.save()
+            except (ValueError, ZonasDeInteresModel.DoesNotExist):
+                pass
         
+        # Actualizar el punto de interés (como ForeignKey)
+        if puntos_id:
+            try:
+                # Si es un string, intentar convertir a entero
+                if isinstance(puntos_id, str):
+                    puntos_id = int(puntos_id)
+                punto = PuntoDeInteresModel.objects.get(id=puntos_id)
+                instance.puntos_de_interes = punto
+                instance.save()
+            except (ValueError, PuntoDeInteresModel.DoesNotExist):
+                pass
+
         return instance
 
 class BarrioModelSerializer(serializers.ModelSerializer):
@@ -175,6 +202,14 @@ class BarrioModelSerializer(serializers.ModelSerializer):
     localidad = serializers.PrimaryKeyRelatedField(
         queryset=LocalidadModel.objects.all(),
         required=True
+    )
+    puntos_de_interes = PuntoDeInteresModelSerializer(many=True, read_only=True)
+    puntos_de_interes_ids = serializers.PrimaryKeyRelatedField(
+        source='puntos_de_interes',
+        queryset=PuntoDeInteresModel.objects.all(),
+        many=True,
+        required=False,
+        write_only=True
     )
     zonas_de_interes = ZonasDeInteresModelSerializer(many=True, read_only=True)
     zonas_de_interes_ids = serializers.PrimaryKeyRelatedField(
@@ -191,7 +226,8 @@ class BarrioModelSerializer(serializers.ModelSerializer):
             'id', 'nombre', 'sigla', 'descripcion', 
             'localidad', 'localidad_nombre',
             'estrato_predominante', 'tipo_barrio', 
-            'multimedia', 'zonas_de_interes', 'zonas_de_interes_ids'
+            'multimedia', 'zonas_de_interes', 'zonas_de_interes_ids',
+            'puntos_de_interes', 'puntos_de_interes_ids'
         ]
 
     def update(self, instance, validated_data):
@@ -199,6 +235,10 @@ class BarrioModelSerializer(serializers.ModelSerializer):
         localidad_data = validated_data.pop('localidad', None)
         if localidad_data:
             instance.localidad = localidad_data
+
+        # Manejar puntos de interés si están presentes
+        if 'puntos_de_interes' in validated_data:
+            instance.puntos_de_interes.set(validated_data.pop('puntos_de_interes'))
 
         # Manejar zonas de interés si están presentes
         if 'zonas_de_interes' in validated_data:
@@ -227,6 +267,14 @@ class ZonaModelSerializer(serializers.ModelSerializer):
 
 class EdificioModelSerializer(serializers.ModelSerializer):
     multimedia = MultimediaModelSerializer(many=True, read_only=True)
+    puntos_de_interes = PuntoDeInteresModelSerializer(many=True, read_only=True)
+    puntos_de_interes_ids = serializers.PrimaryKeyRelatedField(
+        source='puntos_de_interes',
+        queryset=PuntoDeInteresModel.objects.all(),
+        many=True,
+        required=False,
+        write_only=True
+    )
     zonas_de_interes = ZonasDeInteresModelSerializer(many=True, read_only=True)
     zonas_de_interes_ids = serializers.PrimaryKeyRelatedField(
         source='zonas_de_interes',
@@ -252,6 +300,7 @@ class EdificioModelSerializer(serializers.ModelSerializer):
             'descripcion', 'direccion', 'estrato', 
             'telefono', 'barrio', 'barrio_nombre',
             'multimedia', 'zonas_de_interes', 'zonas_de_interes_ids',
+            'puntos_de_interes', 'puntos_de_interes_ids',
             'amenidades', 'amenidades_ids', 'tipo_edificio', 'estado'
         ]
 
@@ -278,6 +327,10 @@ class EdificioModelSerializer(serializers.ModelSerializer):
         # Manejar amenidades si están presentes
         if 'amenidades' in validated_data:
             instance.amenidades.set(validated_data.pop('amenidades'))
+
+        # Manejar puntos de interés si están presentes
+        if 'puntos_de_interes' in validated_data:
+            instance.puntos_de_interes.set(validated_data.pop('puntos_de_interes'))
         
         # Manejar zonas de interés si están presentes
         if 'zonas_de_interes' in validated_data:
@@ -291,7 +344,6 @@ class EdificioModelSerializer(serializers.ModelSerializer):
         return instance
 
 class PropiedadModelSerializer(serializers.ModelSerializer):
-    amenidades = AmenidadesModelSerializer(many=True, read_only=True)
     multimedia = MultimediaModelSerializer(many=True, read_only=True)
     edificio = EdificioModelSerializer(read_only=True)  # Para lectura
     edificio_id = serializers.PrimaryKeyRelatedField(  # Para escritura
@@ -301,32 +353,59 @@ class PropiedadModelSerializer(serializers.ModelSerializer):
         allow_null=True
     )
     propietario = ClienteSerializer(read_only=True)
+    puntos_de_interes = PuntoDeInteresModelSerializer(many=True, read_only=True)
+    puntos_de_interes_ids = serializers.PrimaryKeyRelatedField(
+        source='puntos_de_interes',
+        queryset=PuntoDeInteresModel.objects.all(),
+        many=True,
+        required=False,
+        write_only=True
+    )
+    zonas_de_interes = ZonasDeInteresModelSerializer(many=True, read_only=True)
+    zonas_de_interes_ids = serializers.PrimaryKeyRelatedField(
+        source='zonas_de_interes',
+        queryset=ZonasDeInteresModel.objects.all(),
+        many=True,
+        required=False,
+        write_only=True
+    )
 
     class Meta:
         model = PropiedadModel
         fields = '__all__'
 
     def to_representation(self, instance):
+        if not instance:
+            return {}
+            
         representation = super().to_representation(instance)
         
-        if instance.amenidades.exists():
-            representation['amenidades'] = AmenidadesModelSerializer(
-                instance.amenidades.all(), 
-                many=True
-            ).data
-       
+        # Obtener multimedia de la propiedad
         multimedia = MultimediaModel.objects.filter(
             content_type__model='propiedadmodel',
             object_id=instance.id
         )
-        representation['multimedia'] = MultimediaModelSerializer(multimedia, many=True).data
         
-        # Log para verificar el edificio
-        print("Edificio en la instancia:", instance.edificio)
-        if instance.edificio:
-            representation['edificio'] = EdificioModelSerializer(instance.edificio).data
-            print("Edificio serializado:", representation['edificio'])
-        
+        representation['multimedia'] = MultimediaModelSerializer(
+            multimedia, 
+            many=True,
+            context=self.context
+        ).data
+
+        # Verificar zonas_de_interes antes de acceder
+        if hasattr(instance, 'zonas_de_interes') and instance.zonas_de_interes is not None:
+            representation['zonas_de_interes'] = ZonasDeInteresModelSerializer(
+                instance.zonas_de_interes,
+                context=self.context
+            ).data
+
+        # Verificar puntos_de_interes antes de acceder
+        if hasattr(instance, 'puntos_de_interes') and instance.puntos_de_interes is not None:
+            representation['puntos_de_interes'] = PuntoDeInteresModelSerializer(
+                instance.puntos_de_interes,
+                context=self.context
+            ).data
+
         return representation
 
     def validate(self, data):
@@ -397,3 +476,9 @@ class FaseSeguimientoModelSerializer(serializers.ModelSerializer):
     class Meta:
         model = FaseSeguimientoModel
         fields = '__all__'
+
+class AgendaModelSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = AgendaModel
+        fields = '__all__'
+

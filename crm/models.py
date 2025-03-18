@@ -25,12 +25,12 @@ class ZonasDeInteresModel(models.Model):
     ubicacion = models.JSONField(null=True, blank=True)
     icono = models.ImageField(upload_to='iconos/zonas/', blank=True, null=True)
     multimedia = GenericRelation('MultimediaModel', related_query_name='zona_de_interes')
-    puntos_de_interes = models.ManyToManyField('puntoDeInteresModel', blank=True)
+    puntos_de_interes = models.ManyToManyField('PuntoDeInteresModel', blank=True)
 
     def __str__(self):
         return self.nombre
     
-class puntoDeInteresModel(models.Model):
+class PuntoDeInteresModel(models.Model):
     nombre = models.CharField(max_length=100)
     categoria = models.CharField(max_length=50)
     descripcion = models.TextField(blank=True, null=True)
@@ -109,6 +109,7 @@ class PropiedadModel(models.Model):
     ano_construccion = models.IntegerField(null=True, blank=True)
     caracteristicas_interiores = models.ForeignKey ('CaracteristicasInterioresModel', on_delete=models.SET_NULL, blank=True, null=True)
     amenidades = models.ManyToManyField('AmenidadesModel', blank=True)
+    puntos_de_interes = models.ForeignKey('PuntoDeInteresModel', on_delete=models.SET_NULL, blank=True, null=True)
     zonas_de_interes = models.ForeignKey('ZonasDeInteresModel', on_delete=models.SET_NULL, blank=True, null=True)
     #informacion_legal_financiera = models.JSONField(blank=True, null=True, help_text="""
     #    Formato esperado:
@@ -307,7 +308,8 @@ class EdificioModel(models.Model):
     ano_construccion = models.IntegerField(null=True, blank=True)
     servicios_adicionales = models.TextField(blank=True, null=True)
     amenidades = models.ManyToManyField(AmenidadesModel, related_name='edificios', blank=True)
-    zonas_de_interes = models.ManyToManyField(ZonasDeInteresModel, related_name='edificios', blank=True)
+    puntos_de_interes = models.ForeignKey('PuntoDeInteresModel', on_delete=models.SET_NULL, related_name='edificios', blank=True, null=True)
+    zonas_de_interes = models.ForeignKey('ZonasDeInteresModel', on_delete=models.SET_NULL, related_name='edificios', blank=True, null=True)
     multimedia = GenericRelation('MultimediaModel', related_query_name='edificio')
 
     def __str__(self):
@@ -318,7 +320,8 @@ class LocalidadModel(models.Model):
     nombre = models.CharField(max_length=100)
     sigla = models.CharField(max_length=10, blank=True, null=True)
     descripcion = models.TextField(blank=True, null=True)
-    zonas_de_interes = models.ManyToManyField('ZonasDeInteresModel', blank=True)
+    puntos_de_interes = models.ForeignKey('PuntoDeInteresModel', on_delete=models.SET_NULL, related_name='localidades', blank=True, null=True)
+    zonas_de_interes = models.ForeignKey('ZonasDeInteresModel', on_delete=models.SET_NULL, related_name='localidades', blank=True, null=True)
     multimedia = GenericRelation('MultimediaModel')
 
     def __str__(self):
@@ -348,7 +351,8 @@ class BarrioModel(models.Model):
     ],
     default='residencial'
     )
-    zonas_de_interes = models.ManyToManyField(ZonasDeInteresModel, related_name='barrios', blank=True)
+    puntos_de_interes = models.ForeignKey('PuntoDeInteresModel', on_delete=models.SET_NULL, related_name='barrios', blank=True, null=True)
+    zonas_de_interes = models.ForeignKey('ZonasDeInteresModel', on_delete=models.SET_NULL, related_name='barrios', blank=True, null=True)
     multimedia = GenericRelation('MultimediaModel', related_query_name='barrio')
 
     def __str__(self):
@@ -438,3 +442,13 @@ class AIQueryModel(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
     status = models.CharField(max_length=20, default='pending')
     error_message = models.TextField(null=True, blank=True)
+
+
+class AgendaModel(models.Model):
+    cliente = models.ForeignKey(ClienteModel, on_delete=models.CASCADE)
+    agente = models.ForeignKey(AgenteModel, on_delete=models.CASCADE, null=True, blank=True)
+    fecha = models.DateField()
+    hora = models.TimeField()
+    propiedad = models.ForeignKey('PropiedadModel', on_delete=models.CASCADE, null=True, blank=True)
+    estado = models.CharField(max_length=20, default='pendiente')
+    notas = models.TextField(blank=True, null=True)

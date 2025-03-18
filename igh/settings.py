@@ -33,6 +33,7 @@ ALLOWED_HOSTS = []
 # Application definition
 
 INSTALLED_APPS = [
+    'daphne',
     'django.contrib.admin',
     'django.contrib.auth',
     'django.contrib.contenttypes',
@@ -45,6 +46,8 @@ INSTALLED_APPS = [
     'corsheaders',
     'accounts',
     'crm',
+    'chat',
+    'channels',
 ]
 
 MIDDLEWARE = [
@@ -78,6 +81,15 @@ TEMPLATES = [
 ]
 
 WSGI_APPLICATION = 'igh.wsgi.application'
+
+ASGI_APPLICATION = 'igh.asgi.application'
+
+# Configuración de Channel Layers
+CHANNEL_LAYERS = {
+    'default': {
+        'BACKEND': 'channels.layers.InMemoryChannelLayer',
+    },
+}
 
 
 # Database
@@ -137,6 +149,10 @@ DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 CORS_ALLOW_ALL_ORIGINS = True
 CORS_ALLOWED_ORIGINS = [
     "http://localhost:8080",
+    "http://127.0.0.1:8080",
+    "http://localhost:8501",
+    "http://127.0.0.1:8501",
+
 ]
 CORS_ALLOW_CREDENTIALS = True
 

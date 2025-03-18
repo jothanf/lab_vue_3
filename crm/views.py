@@ -1,7 +1,7 @@
-from django.shortcuts import render
+from django.shortcuts import render, redirect
 from rest_framework import viewsets
-from .models import AmenidadesModel, CaracteristicasInterioresModel, ZonasDeInteresModel, LocalidadModel, BarrioModel, ZonaModel, EdificioModel, PropiedadModel, MultimediaModel, RequerimientoModel, TareaModel, FaseSeguimientoModel, AIQueryModel, puntoDeInteresModel
-from .serializers import AmenidadesModelSerializer, CaracteristicasInterioresModelSerializer, ZonasDeInteresModelSerializer, LocalidadModelSerializer, BarrioModelSerializer, ZonaModelSerializer, EdificioModelSerializer, PropiedadModelSerializer, MultimediaModelSerializer, RequerimientoModelSerializer, TareaModelSerializer, FaseSeguimientoModelSerializer, PuntoDeInteresModelSerializer
+from .models import AmenidadesModel, CaracteristicasInterioresModel, ZonasDeInteresModel, LocalidadModel, BarrioModel, ZonaModel, EdificioModel, PropiedadModel, MultimediaModel, RequerimientoModel, TareaModel, FaseSeguimientoModel, AIQueryModel, PuntoDeInteresModel, AgendaModel
+from .serializers import AmenidadesModelSerializer, CaracteristicasInterioresModelSerializer, ZonasDeInteresModelSerializer, LocalidadModelSerializer, BarrioModelSerializer, ZonaModelSerializer, EdificioModelSerializer, PropiedadModelSerializer, MultimediaModelSerializer, RequerimientoModelSerializer, TareaModelSerializer, FaseSeguimientoModelSerializer, PuntoDeInteresModelSerializer, AgendaModelSerializer   
 from rest_framework.response import Response
 from rest_framework import status
 import json
@@ -13,8 +13,19 @@ import logging
 from .IA.lab_openAI import AIService
 import tempfile
 import os
+import requests
+import base64
+from django.http import JsonResponse
+from django.views.decorators.csrf import csrf_exempt
+import sys
 
 logger = logging.getLogger(__name__)
+
+# Asegúrate de que el directorio del agente está en sys.path
+sys.path.append(os.path.join(os.path.dirname(os.path.dirname(__file__)), 'agentesIA', 'lab'))
+
+# Importar la clase del agente inmobiliario
+from requerimiento import AgenteInmobiliario, agente
 
 # Create your views here.
 
@@ -280,10 +291,33 @@ class LocalidadModelViewSet(viewsets.ModelViewSet):
             serializer = self.get_serializer(data=request.data)
             serializer.is_valid(raise_exception=True)
             localidad = serializer.save()
-            # Manejar la relación de zonas de interés
-            zonas_ids = request.data.get('zonas_de_interes', [])
-            if zonas_ids:
-                localidad.zonas_de_interes.set(zonas_ids)
+            
+            # Manejar la relación de zonas de interés (como ForeignKey)
+            zonas_id = request.data.get('zonas_de_interes')
+            if zonas_id:
+                try:
+                    # Si es un string, intentar convertir a entero
+                    if isinstance(zonas_id, str) and zonas_id.isdigit():
+                        zonas_id = int(zonas_id)
+                    zona = ZonasDeInteresModel.objects.get(id=zonas_id)
+                    localidad.zonas_de_interes = zona
+                    localidad.save()
+                except (ValueError, ZonasDeInteresModel.DoesNotExist):
+                    pass
+                    
+            # Manejar la relación de puntos de interés (como ForeignKey)
+            puntos_id = request.data.get('puntos_de_interes')
+            if puntos_id:
+                try:
+                    # Si es un string, intentar convertir a entero
+                    if isinstance(puntos_id, str) and puntos_id.isdigit():
+                        puntos_id = int(puntos_id)
+                    punto = PuntoDeInteresModel.objects.get(id=puntos_id)
+                    localidad.puntos_de_interes = punto
+                    localidad.save()
+                except (ValueError, PuntoDeInteresModel.DoesNotExist):
+                    pass
+                    
             return Response(serializer.data, status=status.HTTP_201_CREATED)
         except Exception as e:
             return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
@@ -439,6 +473,17 @@ class BarrioModelViewSet(viewsets.ModelViewSet):
                 {'error': str(e)},
                 status=status.HTTP_400_BAD_REQUEST
             )
+        
+    @action(detail=True, methods=['POST'], url_path='agregar-punto-interes')
+    def agregar_punto_interes(self, request, pk=None):
+        try:
+            barrio = self.get_object()
+            punto_id = request.data.get('punto_id')
+            punto = PuntoDeInteresModel.objects.get(id=punto_id)
+            barrio.puntos_de_interes.add(punto)
+            return Response({'message': 'Punto de interés agregado correctamente'})
+        except Exception as e:
+            return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
 
     @action(detail=True, methods=['POST'], url_path='agregar-zona-interes')
     def agregar_zona_interes(self, request, pk=None):
@@ -678,31 +723,44 @@ class PropiedadModelViewSet(viewsets.ModelViewSet):
         return queryset
 
     def retrieve(self, request, *args, **kwargs):
-        instance = self.get_object()
-        serializer = self.get_serializer(instance)
-        multimedia = MultimediaModel.objects.filter(
-            content_type__model='propiedadmodel',
-            object_id=instance.id
-        )
-        multimedia_serializer = MultimediaModelSerializer(
-            multimedia, 
-            many=True,
-            context={'request': request}
-        ).data
-        
-        # Obtener edificios disponibles
-        edificios = EdificioModel.objects.all()
-        edificios_serializer = EdificioModelSerializer(edificios, many=True).data
-        
-        return Response({
-            'propiedad': serializer.data,
-            'amenidades_disponibles': AmenidadesModelSerializer(
-                AmenidadesModel.objects.all(), 
-                many=True
-            ).data,
-            'multimedia': multimedia_serializer,
-            'edificios_disponibles': edificios_serializer  # Agregar edificios disponibles
-        })
+        try:
+            instance = self.get_object()
+            if not instance:
+                return Response(
+                    {'error': 'Propiedad no encontrada'},
+                    status=status.HTTP_404_NOT_FOUND
+                )
+            
+            serializer = self.get_serializer(instance)
+            multimedia = MultimediaModel.objects.filter(
+                content_type__model='propiedadmodel',
+                object_id=instance.id
+            )
+            multimedia_serializer = MultimediaModelSerializer(
+                multimedia, 
+                many=True,
+                context={'request': request}
+            ).data
+            
+            # Obtener edificios disponibles
+            edificios = EdificioModel.objects.all()
+            edificios_serializer = EdificioModelSerializer(edificios, many=True).data
+            
+            return Response({
+                'propiedad': serializer.data,
+                'amenidades_disponibles': AmenidadesModelSerializer(
+                    AmenidadesModel.objects.all(), 
+                    many=True
+                ).data,
+                'multimedia': multimedia_serializer,
+                'edificios_disponibles': edificios_serializer
+            })
+        except Exception as e:
+            print(f"Error en retrieve de propiedad: {str(e)}")
+            return Response(
+                {'error': str(e)},
+                status=status.HTTP_404_NOT_FOUND
+            )
 
     def create(self, request, *args, **kwargs):
         try:
@@ -735,6 +793,16 @@ class PropiedadModelViewSet(viewsets.ModelViewSet):
                 propiedad.amenidades.set(amenidades_ids)  # Asegúrate de que esto esté configurado correctamente
                 print(f"Amenidades guardadas: {amenidades_ids}")
 
+            puntos_de_interes_ids = request.data.get('puntos_de_interes', [])
+            if puntos_de_interes_ids:
+                propiedad.puntos_de_interes.set(puntos_de_interes_ids)
+                print(f"Puntos de interés guardados: {puntos_de_interes_ids}")
+
+            zonas_de_interes_ids = request.data.get('zonas_de_interes', [])
+            if zonas_de_interes_ids:
+                propiedad.zonas_de_interes.set(zonas_de_interes_ids)
+                print(f"Zonas de interés guardadas: {zonas_de_interes_ids}")
+
             return Response(
                 self.get_serializer(propiedad).data,
                 status=status.HTTP_201_CREATED
@@ -756,11 +824,21 @@ class PropiedadModelViewSet(viewsets.ModelViewSet):
 
         # Manejar las amenidades
         amenidades_ids = request.data.get('amenidades_ids', [])
+        puntos_de_interes_ids = request.data.get('puntos_de_interes_ids', [])
+        zonas_de_interes_ids = request.data.get('zonas_de_interes_ids', [])
         print(f"Amenidades IDs recibidos: {amenidades_ids}")  # Debug log
         
         if amenidades_ids is not None:
             instance.amenidades.set(amenidades_ids)
             print(f"Amenidades actualizadas: {instance.amenidades.all()}")  # Debug log
+
+        if puntos_de_interes_ids is not None:
+            instance.puntos_de_interes.set(puntos_de_interes_ids)
+            print(f"Puntos de interés actualizados: {instance.puntos_de_interes.all()}")  # Debug log
+
+        if zonas_de_interes_ids is not None:
+            instance.zonas_de_interes.set(zonas_de_interes_ids)
+            print(f"Zonas de interés actualizadas: {instance.zonas_de_interes.all()}")  # Debug log
 
         # Obtener la instancia actualizada
         serializer = self.get_serializer(instance)
@@ -955,7 +1033,7 @@ def analyze_image(request):
         )
 
 class PuntoDeInteresModelViewSet(viewsets.ModelViewSet):
-    queryset = puntoDeInteresModel.objects.all()
+    queryset = PuntoDeInteresModel.objects.all()
     serializer_class = PuntoDeInteresModelSerializer
     parser_classes = (MultiPartParser, FormParser)
 
@@ -977,11 +1055,12 @@ class PuntoDeInteresModelViewSet(viewsets.ModelViewSet):
             # Manejar archivos multimedia
             multimedia_files = request.FILES.getlist('multimedia')
             for archivo in multimedia_files:
+                tipo = 'video' if archivo.content_type.startswith('video/') else 'foto'
                 MultimediaModel.objects.create(
                     content_type=ContentType.objects.get_for_model(punto),
                     object_id=punto.id,
                     archivo=archivo,
-                    tipo='foto'  # o determinar el tipo según el archivo
+                    tipo=tipo  # Determinar el tipo según el archivo
                 )
 
             # Obtener el objeto actualizado con toda la multimedia
@@ -1036,3 +1115,218 @@ class PuntoDeInteresModelViewSet(viewsets.ModelViewSet):
                 {'error': 'Multimedia no encontrada'},
                 status=status.HTTP_404_NOT_FOUND
             )
+
+    def update(self, request, *args, **kwargs):
+        try:
+            punto = self.get_object()
+            
+            # Actualizar campos básicos
+            serializer = self.get_serializer(punto, data=request.data, partial=True)
+            serializer.is_valid(raise_exception=True)
+            punto = serializer.save()
+
+            # Manejar archivos multimedia
+            multimedia_files = request.FILES.getlist('multimedia')
+            for archivo in multimedia_files:
+                tipo = 'video' if archivo.content_type.startswith('video/') else 'foto'
+                MultimediaModel.objects.create(
+                    content_type=ContentType.objects.get_for_model(punto),
+                    object_id=punto.id,
+                    archivo=archivo,
+                    tipo=tipo
+                )
+
+            # Obtener el objeto actualizado con toda la multimedia
+            serializer = self.get_serializer(punto)
+            return Response(serializer.data)
+
+        except Exception as e:
+            return Response(
+                {'error': str(e)},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+@api_view(['POST'])
+def generate_image(request):
+    try:
+        dimensions = request.data.get('dimensions', 1024)
+        style = request.data.get('style', 'icon')
+        prompt = request.data.get('prompt', '')
+        colors = request.data.get('colors', None)
+        quality = request.data.get('quality', 'standard')
+
+        from .IA.img_generator import AIService
+        ai_service = AIService()
+        result = ai_service.generate_image(dimensions, style, prompt, colors, quality)
+
+        if result["success"]:
+            # Descargar la imagen y convertirla a base64
+            response = requests.get(result["image_url"])
+            if response.status_code == 200:
+                image_base64 = base64.b64encode(response.content).decode('utf-8')
+                return Response({
+                    "success": True,
+                    "image_url": result["image_url"],
+                    "image_base64": image_base64
+                })
+            else:
+                return Response({
+                    "error": "No se pudo descargar la imagen"
+                }, status=500)
+        else:
+            return Response({"error": result["error"]}, status=500)
+    except Exception as e:
+        return Response({"error": str(e)}, status=500)
+
+class AgendaModelViewSet(viewsets.ModelViewSet):
+    queryset = AgendaModel.objects.all()
+    serializer_class = AgendaModelSerializer
+    
+    def get_queryset(self):
+        """
+        Filtra las agendas según el cliente especificado en los parámetros de consulta.
+        """
+        queryset = AgendaModel.objects.all()
+        cliente_id = self.request.query_params.get('cliente', None)
+        
+        if cliente_id is not None:
+            queryset = queryset.filter(cliente_id=cliente_id)
+        
+        return queryset
+    
+    def create(self, request, *args, **kwargs):
+        """
+        Crea una nueva agenda.
+        """
+        print("Datos recibidos para crear agenda:", request.data)
+        
+        # Validar datos requeridos
+        required_fields = ['cliente', 'agente', 'fecha', 'hora']
+        for field in required_fields:
+            if field not in request.data:
+                return Response(
+                    {field: f"El campo '{field}' es requerido"},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+        
+        try:
+            serializer = self.get_serializer(data=request.data)
+            serializer.is_valid(raise_exception=True)
+            self.perform_create(serializer)
+            
+            print(f"Agenda creada: {serializer.data}")
+            return Response(serializer.data, status=status.HTTP_201_CREATED)
+        except Exception as e:
+            print(f"Error al crear agenda: {str(e)}")
+            return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
+        
+@csrf_exempt
+def requerimientoAgentView(request):
+    """Vista para manejar la conversación con el agente de requerimientos inmobiliarios."""
+    if request.method == 'POST':
+        try:
+            data = json.loads(request.body)
+            action = data.get('action', '')
+            
+            if action == 'iniciar':
+                # Reiniciar el agente para una nueva conversación
+                agente.reset()
+                response = agente.procesar_mensaje('')
+                return JsonResponse(response)
+            
+            elif action == 'mensaje':
+                mensaje = data.get('mensaje', '')
+                response = agente.procesar_mensaje(mensaje)
+                return JsonResponse(response)
+            
+            elif action == 'confirmar':
+                confirmacion = data.get('confirmacion', False)
+                response = agente.confirmar_resumen(confirmacion)
+                return JsonResponse(response)
+            
+            elif action == 'modificar':
+                aspectos = data.get('aspectos', 'todos')
+                response = agente.modificar_aspectos(aspectos)
+                return JsonResponse(response)
+            
+            else:
+                return JsonResponse({'error': 'Acción no reconocida'}, status=400)
+                
+        except Exception as e:
+            return JsonResponse({'error': str(e)}, status=500)
+    
+    return JsonResponse({'error': 'Método no permitido'}, status=405)
+
+@api_view(['GET', 'POST'])
+def requerimientoAIView(request):
+    print("Llamada a requerimientoAIView con método:", request.method)
+    
+    if request.method == 'POST':
+        print("Procesando solicitud POST para crear un nuevo requerimiento.")
+        
+        # Capturar la información del nuevo requerimiento
+        data = request.data
+        print("Datos recibidos:", data)
+        
+        # Validar que los campos obligatorios estén presentes
+        if 'agente' not in data or 'cliente' not in data:
+            print("Error: Los campos 'agente' y 'cliente' son obligatorios no están presentes.")
+            return Response(
+                {"error": "Los campos 'agente' y 'cliente' son obligatorios"}, 
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        # Asegurarse de que tipo_negocio sea un JSON válido
+        if 'tipo_negocio' in data and isinstance(data['tipo_negocio'], str):
+            try:
+                data['tipo_negocio'] = json.loads(data['tipo_negocio'])
+                print("tipo_negocio convertido a JSON válido:", data['tipo_negocio'])
+            except json.JSONDecodeError:
+                # Si no es un JSON válido, convertirlo a un formato válido
+                data['tipo_negocio'] = {"tipo": data['tipo_negocio']}
+                print("tipo_negocio no era un JSON válido, convertido a formato válido:", data['tipo_negocio'])
+        
+        # Convertir campos numéricos si vienen como strings
+        numeric_fields = ['habitantes', 'area_minima', 'habitaciones', 'banos', 'parqueaderos']
+        for field in numeric_fields:
+            if field in data and isinstance(data[field], str):
+                try:
+                    data[field] = int(data[field])
+                    print(f"Campo '{field}' convertido a entero:", data[field])
+                except ValueError:
+                    print(f"Error: El campo '{field}' debe ser un número entero.")
+                    return Response(
+                        {"error": f"El campo '{field}' debe ser un número entero"}, 
+                        status=status.HTTP_400_BAD_REQUEST
+                    )
+        
+        # Convertir campos decimales si vienen como strings
+        decimal_fields = ['presupuesto_minimo', 'presupuesto_maximo', 
+                         'presupuesto_minimo_compra', 'presupuesto_maximo_compra']
+        for field in decimal_fields:
+            if field in data and isinstance(data[field], str):
+                try:
+                    data[field] = float(data[field])
+                    print(f"Campo '{field}' convertido a decimal:", data[field])
+                except ValueError:
+                    print(f"Error: El campo '{field}' debe ser un número decimal.")
+                    return Response(
+                        {"error": f"El campo '{field}' debe ser un número decimal"}, 
+                        status=status.HTTP_400_BAD_REQUEST
+                    )
+        
+        # Crear el serializer con los datos validados
+        serializer = RequerimientoModelSerializer(data=data)
+        print("Serializer creado con los datos validados.")
+        
+        if serializer.is_valid():
+            serializer.save()  # Guardar el nuevo requerimiento en la base de datos
+            print("Nuevo requerimiento guardado exitosamente.")
+            return Response(serializer.data, status=status.HTTP_201_CREATED)
+        
+        print("Errores de validación en el serializer:", serializer.errors)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+    
+    # Si es una solicitud GET, podríamos devolver un formulario o documentación
+    print("Solicitud GET recibida. Instrucciones para el usuario.")
+    return Response({"message": "Usa POST para crear un nuevo requerimiento"})

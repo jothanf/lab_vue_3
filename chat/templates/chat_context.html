@@ -1,0 +1,46 @@
+<h2>Chat Context</h2>
+<form method="POST">
+    {% csrf_token %}
+    <input type="hidden" name="context_type" value="{{ chat_context }}">
+    {% if debug %}
+        <div style="display:none">
+            Debug: context_type={{ chat_context }}
+        </div>
+    {% endif %}
+    <label for="context_type">Tipo de Contexto:</label>
+    <select id="context_type" name="context_type">
+        <option value="edificio">Edificio</option>
+        <option value="propiedad">Propiedad</option>
+        <option value="localidad">Localidad</option>
+    </select>
+    <button type="submit">Siguiente</button>
+</form>
+
+{% if chat_context %}
+    <div>
+        <h3>Selecciona un {{ chat_context }}:</h3>
+        <form method="POST">
+            {% csrf_token %}
+            <input type="hidden" name="context_type" value="{{ chat_context }}">
+            <select name="item_id">
+                {% if edificios %}
+                    {% for edificio in edificios %}
+                        <option value="{{ edificio.id }}">{{ edificio.nombre }}</option>
+                    {% endfor %}
+                {% endif %}
+                {% if propiedades %}
+                    {% for propiedad in propiedades %}
+                        <option value="{{ propiedad.id }}">{{ propiedad.titulo }}</option>
+                    {% endfor %}
+                {% endif %}
+                {% if localidades %}
+                    {% for localidad in localidades %}
+
+                        <option value="{{ localidad.id }}">{{ localidad.nombre }}</option>
+                    {% endfor %}
+                {% endif %}
+            </select>
+            <button type="submit" name="select_item">Iniciar Chat</button>
+        </form>
+    </div>
+{% endif %}

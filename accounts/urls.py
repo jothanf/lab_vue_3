@@ -16,13 +16,14 @@ Including another URLconf
 """
 from django.urls import path, include
 from rest_framework.routers import DefaultRouter
-from .views import AgenteModelViewSet, login_view, ClienteModelViewSet
+from .views import AgenteModelViewSet, login_view, ClienteModelViewSet, register_cliente
 
 router = DefaultRouter()
 router.register(r'agente', AgenteModelViewSet)
 router.register(r'cliente', ClienteModelViewSet)
 
 urlpatterns = [
-    path('', include(router.urls)),
+    path('cliente/register/', register_cliente, name='register_cliente'),
     path('login/', login_view, name='login'),
+    path('', include(router.urls)),
 ]
