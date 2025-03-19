@@ -61,7 +61,8 @@ class AgendaTool(BaseTool):
                 }
             
             # Crear la agenda usando la API
-            url = "http://127.0.0.1:8000/crm/agenda/"  # URL directa en lugar de usar settings
+            #url = "http://127.0.0.1:8000/crm/agenda/"  # URL directa en lugar de usar settings
+            url = "http://127.0.0.1:8000/crm/agendaAbierta/"  # URL directa en lugar de usar settings
             
             # Datos para la creación de la agenda
             data = {
@@ -132,3 +133,84 @@ def obtener_agentes_disponibles() -> List[Dict[str, Any]]:
     except Exception as e:
         logger.exception(f"Excepción al obtener agentes: {str(e)}")
         return []
+
+class AgendaReservaSchema(BaseModel):
+    """Esquema para reservar una agenda."""
+    agenda_id: int = Field(..., description="ID de la agenda que se desea reservar")
+    comentarios: Optional[str] = Field(None, description="Comentarios adicionales sobre la reserva")
+
+class AgendaReservaTool(BaseTool):
+    """Herramienta para reservar agendas."""
+    name: str = "reservar_agenda"
+    description: str = """
+    Reserva una agenda específica para un cliente.
+    Útil cuando un cliente quiere reservar una cita o agenda específica.
+    La herramienta necesita solo el ID de la agenda, ya que el ID del cliente está configurado.
+    """
+    args_schema: Type[BaseModel] = AgendaReservaSchema
+    return_direct: bool = False
+    cliente_id: Optional[int] = None
+
+    def __init__(self, cliente_id: Optional[int] = None, **kwargs):
+        super().__init__(**kwargs)
+        self.cliente_id = cliente_id
+
+    def _run(self, agenda_id: int, comentarios: Optional[str] = None) -> Dict:
+        """
+        Ejecuta la reserva de la agenda.
+        """
+        if not self.cliente_id:
+            return {
+                "success": False,
+                "message": "No se ha proporcionado un ID de cliente válido"
+            }
+            
+        try:
+            logger.info(f"Iniciando reserva de agenda {agenda_id} para cliente {self.cliente_id}")
+            
+            # URL para la actualización de la agenda
+            url = f"http://localhost:8000/crm/agendaAbierta/{agenda_id}/"
+            
+            # Obtener datos actuales de la agenda
+            response = requests.get(url)
+            if response.status_code != 200:
+                return {
+                    "success": False,
+                    "message": f"No se pudo obtener la agenda: {response.status_code}"
+                }
+            
+            agenda_actual = response.json()
+            
+            # Preparar datos para la actualización
+            data = {
+                "agente": agenda_actual.get('agente'),
+                "fecha": agenda_actual.get('fecha'),
+                "hora": agenda_actual.get('hora'),
+                "cliente": self.cliente_id,
+                "disponible": False,
+                "comentarios": comentarios or "Reservada a través del asistente virtual"
+            }
+            
+            # Realizar la actualización
+            response = requests.put(url, json=data)
+            
+            if response.status_code == 200:
+                logger.info(f"Agenda {agenda_id} reservada exitosamente")
+                return {
+                    "success": True,
+                    "message": "Agenda reservada exitosamente",
+                    "data": response.json()
+                }
+            else:
+                logger.error(f"Error al reservar agenda: {response.status_code}")
+                return {
+                    "success": False,
+                    "message": f"Error al reservar agenda: {response.status_code}"
+                }
+                
+        except Exception as e:
+            logger.exception(f"Error en reserva de agenda: {str(e)}")
+            return {
+                "success": False,
+                "message": f"Error al reservar agenda: {str(e)}"
+            }

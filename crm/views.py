@@ -1511,9 +1511,44 @@ def propiedadAIView(request):
     return Response({"message": "Usa POST para crear una nueva propiedad"})
 
 @csrf_exempt
-def agendaAbiertaView(request):
-    """Vista para que los agentes puedan abrir una nueva agenda o listar agendas existentes."""
-    if request.method == 'POST':
+def agendaAbiertaView(request, agenda_id=None):
+    """Vista para que los agentes puedan abrir una nueva agenda, listar, editar o eliminar agendas existentes."""
+    if request.method == 'GET':
+        try:
+            if agenda_id:
+                # Si se proporciona un ID, obtener esa agenda específica
+                agenda = AgendaAbiertaModel.objects.get(id=agenda_id)
+                serializer = AgendaAbiertaModelSerializer(agenda)
+                return JsonResponse(serializer.data)
+            else:
+                # Si no hay ID, obtener solo las agendas disponibles
+                agendas = AgendaAbiertaModel.objects.filter(disponible=True)
+                serializer = AgendaAbiertaModelSerializer(agendas, many=True)
+                return JsonResponse(serializer.data, safe=False)
+        except AgendaAbiertaModel.DoesNotExist:
+            return JsonResponse({'error': 'Agenda no encontrada'}, status=404)
+        except Exception as e:
+            return JsonResponse({'error': str(e)}, status=500)
+
+    elif request.method == 'PUT':
+        try:
+            if not agenda_id:
+                return JsonResponse({'error': 'Se requiere ID de agenda'}, status=400)
+            
+            data = json.loads(request.body)
+            agenda = AgendaAbiertaModel.objects.get(id=agenda_id)
+            serializer = AgendaAbiertaModelSerializer(agenda, data=data)
+            
+            if serializer.is_valid():
+                serializer.save()
+                return JsonResponse(serializer.data, status=200)
+            return JsonResponse(serializer.errors, status=400)
+        except AgendaAbiertaModel.DoesNotExist:
+            return JsonResponse({'error': 'Agenda no encontrada'}, status=404)
+        except Exception as e:
+            return JsonResponse({'error': str(e)}, status=500)
+
+    elif request.method == 'POST':
         try:
             data = json.loads(request.body)
             serializer = AgendaAbiertaModelSerializer(data=data)
@@ -1525,11 +1560,16 @@ def agendaAbiertaView(request):
         except Exception as e:
             return JsonResponse({'error': str(e)}, status=500)  # Manejo de errores
 
-    elif request.method == 'GET':
+    elif request.method == 'DELETE':
         try:
-            agendas = AgendaAbiertaModel.objects.all()  # Obtener todas las agendas
-            serializer = AgendaAbiertaModelSerializer(agendas, many=True)  # Serializar las agendas
-            return JsonResponse(serializer.data, safe=False)  # Retornar las agendas como JSON
+            if not agenda_id:
+                return JsonResponse({'error': 'Se requiere ID de agenda'}, status=400)
+            
+            agenda = AgendaAbiertaModel.objects.get(id=agenda_id)
+            agenda.delete()  # Eliminar la agenda
+            return JsonResponse({'message': 'Agenda eliminada con éxito'}, status=204)  # Retornar éxito
+        except AgendaAbiertaModel.DoesNotExist:
+            return JsonResponse({'error': 'Agenda no encontrada'}, status=404)  # Manejo de agenda no encontrada
         except Exception as e:
             return JsonResponse({'error': str(e)}, status=500)  # Manejo de errores
 
@@ -1542,12 +1582,24 @@ def agendaAgentView(request):
         try:
             data = json.loads(request.body)
             action = data.get('action', '')
+            cliente_id = data.get('cliente_id')
             
-            agente = AgenteAgenda()
+            # Convertir cliente_id a entero si existe
+            if cliente_id is not None:
+                try:
+                    cliente_id = int(cliente_id)
+                except (ValueError, TypeError):
+                    return JsonResponse({
+                        'error': 'ID de cliente inválido'
+                    }, status=400)
+            
+            print(f"Recibida petición con action={action}, cliente_id={cliente_id}")
+            
+            # Crear el agente con el cliente_id
+            agente = AgenteAgenda(cliente_id=cliente_id)
             
             if action == 'iniciar':
-                agente.reset()
-                response = agente.procesar_mensaje('')
+                response = agente.procesar_mensaje('Hola')  # Mensaje inicial
                 return JsonResponse(response)
             
             elif action == 'mensaje':
@@ -1559,6 +1611,9 @@ def agendaAgentView(request):
                 return JsonResponse({'error': 'Acción no reconocida'}, status=400)
                 
         except Exception as e:
-            return JsonResponse({'error': f"Error al procesar la solicitud: {str(e)}"}, status=500)
+            print(f"Error en agendaAgentView: {str(e)}")
+            return JsonResponse({
+                'error': f"Error al procesar la solicitud: {str(e)}"
+            }, status=500)
     
     return JsonResponse({'error': 'Método no permitido'}, status=405)

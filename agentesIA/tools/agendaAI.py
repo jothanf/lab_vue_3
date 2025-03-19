@@ -6,6 +6,10 @@ from datetime import datetime
 from dotenv import load_dotenv
 from langchain.memory import ConversationBufferMemory
 from langchain_openai import ChatOpenAI
+import re
+from langchain.agents import initialize_agent, AgentType
+from langchain.tools import Tool
+from .agendaTool import AgendaReservaTool
 
 # Configurar salida estándar a UTF-8 para evitar problemas de codificación en la terminal
 sys.stdout.reconfigure(encoding='utf-8')
@@ -75,8 +79,77 @@ def formatear_agendas(agendas):
         
     return resultado
 
+def reservar_agenda(agenda_id, cliente_id, comentarios="Reservada mediante chatbot"):
+    """
+    Actualiza una agenda abierta para asignarla a un cliente específico.
+    """
+    try:
+        print("\n=== INICIANDO PROCESO DE RESERVA ===")
+        print(f"Intentando reservar agenda ID: {agenda_id} para cliente ID: {cliente_id}")
+        
+        # Usar la URL específica con el ID de la agenda
+        url = f"{BASE_URL}/crm/agendaAbierta/{agenda_id}/"
+        print(f"URL de reserva: {url}")
+        
+        # Primero obtener la agenda actual
+        print("Obteniendo datos actuales de la agenda...")
+        agendas = obtener_agendas_abiertas()
+        agenda = None
+        
+        for a in agendas:
+            if a.get('id') == agenda_id:
+                agenda = a
+                break
+                
+        if not agenda:
+            print(f"ERROR: No se encontró la agenda con ID {agenda_id}")
+            return {
+                "success": False,
+                "message": f"No se encontró la agenda con ID {agenda_id}"
+            }
+            
+        print(f"Agenda encontrada: {agenda}")
+        
+        # Preparar datos para actualización
+        data = {
+            "agente": agenda.get('agente'),
+            "fecha": agenda.get('fecha'),
+            "hora": agenda.get('hora'),
+            "cliente": cliente_id,
+            "disponible": False,
+            "comentarios": comentarios
+        }
+        print(f"Datos preparados para actualización: {data}")
+        
+        # Realizar la solicitud PUT
+        print("Enviando solicitud PUT para actualizar agenda...")
+        response = requests.put(url, json=data)
+        print(f"Código de respuesta: {response.status_code}")
+        print(f"Respuesta del servidor: {response.text}")
+        
+        if response.status_code == 200:
+            print("¡Reserva exitosa!")
+            return {
+                "success": True,
+                "message": "Agenda reservada exitosamente",
+                "data": response.json()
+            }
+        else:
+            print(f"ERROR: La reserva falló con código {response.status_code}")
+            return {
+                "success": False,
+                "message": f"Error al reservar agenda: {response.status_code}",
+                "error": response.text
+            }
+    except Exception as e:
+        print(f"ERROR CRÍTICO en reservar_agenda: {str(e)}")
+        return {
+            "success": False,
+            "message": f"Error al reservar agenda: {str(e)}"
+        }
+
 class AgenteAgenda:
-    def __init__(self):
+    def __init__(self, cliente_id=None):
         # Inicializar la memoria de la conversación
         self.memory = ConversationBufferMemory()
         
@@ -90,6 +163,24 @@ class AgenteAgenda:
         # Estado del agente
         self.ultima_consulta_agendas = None
         self.agendas_cache = None
+        
+        # Establecer el ID del cliente desde el inicio
+        self.cliente_id = cliente_id
+        
+        # Inicializar herramientas
+        self.tools = [
+            AgendaReservaTool(cliente_id=cliente_id),
+        ]
+        
+        # Inicializar el agente
+        self.agent = initialize_agent(
+            tools=self.tools,
+            llm=self.llm,
+            agent=AgentType.STRUCTURED_CHAT_ZERO_SHOT_REACT_DESCRIPTION,
+            verbose=True,
+            memory=self.memory,
+            handle_parsing_errors=True
+        )
     
     def reset(self):
         """Reinicia la conversación y las respuestas"""
@@ -150,61 +241,46 @@ class AgenteAgenda:
         
     def procesar_mensaje(self, mensaje_usuario):
         """
-        Procesa el mensaje del usuario y decide si necesita consultar las agendas.
+        Procesa el mensaje del usuario usando el agente de LangChain.
         """
-        if not mensaje_usuario or not mensaje_usuario.strip():
-            return {
-                "tipo": "respuesta",
-                "mensaje": "Por favor, introduce una consulta válida sobre agendas inmobiliarias."
-            }
+        print("\n=== PROCESANDO MENSAJE DEL USUARIO ===")
+        print(f"Mensaje recibido: {mensaje_usuario}")
+        print(f"Cliente ID actual: {self.cliente_id}")
         
         try:
-            # Verificar si es necesario consultar agendas
-            palabras_clave = ["agenda", "horario", "disponible", "disponibilidad", "fecha", "fechas", 
-                            "hora", "horas", "propiedad", "propiedades", "inmueble", "inmuebles", 
-                            "visita", "visitar", "cita", "coordinar", "programar"]
+            # Obtener agendas disponibles
+            agendas = obtener_agendas_abiertas()
             
-            debe_consultar = any(palabra in mensaje_usuario.lower() for palabra in palabras_clave)
+            # Crear el contexto para el agente
+            contexto = f"""
+            Eres un asistente virtual especializado en agendas inmobiliarias.
             
-            # También consultar si ha pasado cierto tiempo desde la última consulta
-            tiempo_transcurrido = datetime.now() - self.ultima_consulta_agendas if self.ultima_consulta_agendas else None
-            consulta_expirada = tiempo_transcurrido and tiempo_transcurrido.total_seconds() > 300  # 5 minutos
+            Instrucciones importantes:
+            1. SIEMPRE muestra las agendas disponibles cuando el usuario pregunte por ellas o quiera hacer una reserva.
+            2. NO reserves ninguna agenda hasta que el usuario especifique explícitamente el ID que desea reservar.
+            3. El formato para que el usuario reserve debe ser "quiero reservar/separar la agenda id=X" donde X es el número.
             
-            agendas = None
-            # Consultar agendas si es necesario
-            if debe_consultar or consulta_expirada or self.agendas_cache is None:
-                try:
-                    print("Consultando agendas en el backend...")
-                    agendas = obtener_agendas_abiertas()
-                except Exception as e:
-                    print(f"Error al obtener agendas: {e}")
-                    return {
-                        "tipo": "error",
-                        "mensaje": f"Lo siento, ocurrió un error al obtener las agendas. Por favor, intenta más tarde."
-                    }
-            else:
-                # Usar las agendas en caché
-                agendas = self.agendas_cache
+            Agendas disponibles:
+            {formatear_agendas(agendas)}
             
-            # Guardar el mensaje del usuario en la memoria
-            self.memory.save_context(
-                {"input": mensaje_usuario},
-                {"output": ""}  # Guardaremos la respuesta después de generarla
-            )
+            Cliente actual ID: {self.cliente_id}
             
-            # Generar respuesta natural
-            respuesta = self.generar_respuesta_natural(mensaje_usuario, agendas)
+            Si el usuario quiere reservar una agenda:
+            1. Si no especifica ID, muestra las agendas disponibles y pide que elija una por su ID
+            2. Si especifica ID (formato: id=X), usa la herramienta reservar_agenda
+            3. Confirma el resultado al usuario
             
-            # Guardar la respuesta en la memoria
-            self.memory.save_context(
-                {"input": ""},  # Ya guardamos el input antes
-                {"output": respuesta}
-            )
+            No pidas el ID del cliente, ya lo tenemos: {self.cliente_id}
+            """
+            
+            # Ejecutar el agente con el contexto
+            respuesta = self.agent.run(f"{contexto}\n\nUsuario: {mensaje_usuario}")
             
             return {
                 "tipo": "respuesta",
                 "mensaje": respuesta
             }
+            
         except Exception as e:
             print(f"Error en procesar_mensaje: {e}")
             return {
