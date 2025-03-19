@@ -1,7 +1,7 @@
 from django.shortcuts import render, redirect
 from rest_framework import viewsets
-from .models import AmenidadesModel, CaracteristicasInterioresModel, ZonasDeInteresModel, LocalidadModel, BarrioModel, ZonaModel, EdificioModel, PropiedadModel, MultimediaModel, RequerimientoModel, TareaModel, FaseSeguimientoModel, AIQueryModel, PuntoDeInteresModel, AgendaModel
-from .serializers import AmenidadesModelSerializer, CaracteristicasInterioresModelSerializer, ZonasDeInteresModelSerializer, LocalidadModelSerializer, BarrioModelSerializer, ZonaModelSerializer, EdificioModelSerializer, PropiedadModelSerializer, MultimediaModelSerializer, RequerimientoModelSerializer, TareaModelSerializer, FaseSeguimientoModelSerializer, PuntoDeInteresModelSerializer, AgendaModelSerializer   
+from .models import AmenidadesModel, CaracteristicasInterioresModel, ZonasDeInteresModel, LocalidadModel, BarrioModel, ZonaModel, EdificioModel, PropiedadModel, MultimediaModel, RequerimientoModel, TareaModel, FaseSeguimientoModel, AIQueryModel, PuntoDeInteresModel, AgendaModel, AgendaAbiertaModel
+from .serializers import AmenidadesModelSerializer, CaracteristicasInterioresModelSerializer, ZonasDeInteresModelSerializer, LocalidadModelSerializer, BarrioModelSerializer, ZonaModelSerializer, EdificioModelSerializer, PropiedadModelSerializer, MultimediaModelSerializer, RequerimientoModelSerializer, TareaModelSerializer, FaseSeguimientoModelSerializer, PuntoDeInteresModelSerializer, AgendaModelSerializer, AgendaAbiertaModelSerializer   
 from rest_framework.response import Response
 from rest_framework import status
 import json
@@ -18,6 +18,7 @@ import base64
 from django.http import JsonResponse
 from django.views.decorators.csrf import csrf_exempt
 import sys
+from agentesIA.tools.agendaAI import AgenteAgenda
 
 logger = logging.getLogger(__name__)
 
@@ -26,6 +27,7 @@ sys.path.append(os.path.join(os.path.dirname(os.path.dirname(__file__)), 'agente
 
 # Importar la clase del agente inmobiliario
 from requerimiento import AgenteInmobiliario, agente
+from propiedad import agente_propiedad
 
 # Create your views here.
 
@@ -1351,3 +1353,212 @@ def requerimientoAIView(request):
     # Si es una solicitud GET, podríamos devolver un formulario o documentación
     print("Solicitud GET recibida. Instrucciones para el usuario.")
     return Response({"message": "Usa POST para crear un nuevo requerimiento"})
+
+@csrf_exempt
+def propiedadAgentView(request):
+    """Vista para manejar la conversación con el agente de registro de propiedades."""
+    if request.method == 'POST':
+        try:
+            data = json.loads(request.body)
+            action = data.get('action', '')
+            
+            # Mejorar el log para depuración
+            print(f"PropiedadAgentView: Action={action}, Data={data}")
+            
+            # Verificar si se proporcionaron IDs
+            if action == 'iniciar':
+                # Obtener IDs (usar valores por defecto si no se proporcionan)
+                agente_id = data.get('agente_id', 12)
+                if agente_id is None:
+                    print("Error: El ID del agente es nulo. Usando valor por defecto: 12")
+                    agente_id = 12
+                
+                propietario_id = data.get('propietario_id')
+                print(f"Iniciando conversación con Agente ID: {agente_id}, Propietario ID: {propietario_id}")
+                
+                # Configurar los IDs en el agente
+                agente_propiedad.set_ids(agente_id=agente_id, propietario_id=propietario_id)
+                
+                # Reiniciar el agente para una nueva conversación
+                agente_propiedad.reset()
+                response = agente_propiedad.procesar_mensaje('')
+                return JsonResponse(response)
+            
+            elif action == 'mensaje':
+                mensaje = data.get('mensaje', '')
+                response = agente_propiedad.procesar_mensaje(mensaje)
+                return JsonResponse(response)
+            
+            elif action == 'confirmar':
+                confirmacion = data.get('confirmacion', False)
+                response = agente_propiedad.confirmar_resumen(confirmacion)
+                return JsonResponse(response)
+            
+            elif action == 'modificar':
+                aspectos = data.get('aspectos', 'todos')
+                response = agente_propiedad.modificar_aspectos(aspectos)
+                return JsonResponse(response)
+            
+            else:
+                return JsonResponse({'error': 'Acción no reconocida'}, status=400)
+                
+        except Exception as e:
+            print(f"Error al procesar la solicitud: {str(e)}")
+            return JsonResponse({'error': f"Error al procesar la solicitud: {str(e)}"}, status=500)
+    
+    return JsonResponse({'error': 'Método no permitido'}, status=405)
+
+@api_view(['GET', 'POST'])
+def propiedadAIView(request):
+    print("Llamada a propiedadAIView con método:", request.method)
+    
+    if request.method == 'POST':
+        print("Procesando solicitud POST para crear una nueva propiedad.")
+        
+        # Capturar la información de la nueva propiedad
+        data = request.data
+        print("Datos recibidos:", data)
+        
+        # Validar que el campo agente esté presente
+        if 'agente' not in data:
+            print("Error: El campo 'agente' es obligatorio y no está presente.")
+            return Response(
+                {"error": "El campo 'agente' es obligatorio"}, 
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        # Asegurarse de que modalidad_de_negocio sea un JSON válido
+        if 'modalidad_de_negocio' in data and isinstance(data['modalidad_de_negocio'], str):
+            try:
+                data['modalidad_de_negocio'] = json.loads(data['modalidad_de_negocio'])
+                print("modalidad_de_negocio convertido a JSON válido:", data['modalidad_de_negocio'])
+            except json.JSONDecodeError:
+                # Si no es un JSON válido, convertirlo a un formato válido
+                data['modalidad_de_negocio'] = {"operacion": data['modalidad_de_negocio']}
+                print("modalidad_de_negocio no era un JSON válido, convertido a formato válido:", data['modalidad_de_negocio'])
+        
+        # Asegurarse de que direccion sea un JSON válido
+        if 'direccion' in data and isinstance(data['direccion'], str):
+            try:
+                data['direccion'] = json.loads(data['direccion'])
+                print("direccion convertido a JSON válido:", data['direccion'])
+            except json.JSONDecodeError:
+                # Si no es un JSON válido, convertirlo a un formato válido
+                data['direccion'] = {"direccion": data['direccion']}
+                print("direccion no era un JSON válido, convertido a formato válido:", data['direccion'])
+        
+        # Asegurarse de que garajes y depositos sean JSON válidos
+        for field in ['garajes', 'depositos']:
+            if field in data and isinstance(data[field], str):
+                try:
+                    data[field] = json.loads(data[field])
+                    print(f"{field} convertido a JSON válido:", data[field])
+                except json.JSONDecodeError:
+                    # Si no es un JSON válido, intentar extraer un número
+                    import re
+                    match = re.search(r'\d+', data[field])
+                    if match:
+                        cantidad = match.group(0)
+                        data[field] = {"cantidad": cantidad}
+                        print(f"{field} no era un JSON válido, convertido a formato válido:", data[field])
+                    else:
+                        data[field] = {"cantidad": "1"}
+        
+        # Convertir campos numéricos si vienen como strings
+        numeric_fields = ['nivel', 'metro_cuadrado_construido', 'metro_cuadrado_propiedad',
+                         'habitaciones', 'habitacion_de_servicio', 'banos']
+        for field in numeric_fields:
+            if field in data and isinstance(data[field], str):
+                try:
+                    # Intentar extraer un número si el campo contiene texto
+                    import re
+                    match = re.search(r'\d+', data[field])
+                    if match:
+                        data[field] = int(match.group(0))
+                    else:
+                        data[field] = int(data[field])
+                    print(f"Campo '{field}' convertido a entero:", data[field])
+                except ValueError:
+                    print(f"Error: El campo '{field}' debe ser un número entero.")
+                    # Establecer valor por defecto en lugar de retornar error
+                    if field in ['habitaciones', 'banos', 'nivel']:
+                        data[field] = 0
+                    else:
+                        data[field] = None
+        
+        # Normalizar campos de selección
+        for field in ['terraza', 'balcon', 'mascotas']:
+            if field in data and isinstance(data[field], str):
+                if data[field].lower() in ['sí', 'si', 'yes', 'y', 'true', '1']:
+                    data[field] = 'si'
+                else:
+                    data[field] = 'no'
+        
+        # Crear el serializer con los datos validados
+        serializer = PropiedadModelSerializer(data=data)
+        print("Serializer creado con los datos validados.")
+        
+        if serializer.is_valid():
+            serializer.save()  # Guardar la nueva propiedad en la base de datos
+            print("Nueva propiedad guardada exitosamente.")
+            return Response(serializer.data, status=status.HTTP_201_CREATED)
+        
+        print("Errores de validación en el serializer:", serializer.errors)
+        return Response({"error": "Errores de validación en los datos proporcionados.", "detalles": serializer.errors}, status=status.HTTP_400_BAD_REQUEST)
+    
+    # Si es una solicitud GET, podríamos devolver un formulario o documentación
+    print("Solicitud GET recibida. Instrucciones para el usuario.")
+    return Response({"message": "Usa POST para crear una nueva propiedad"})
+
+@csrf_exempt
+def agendaAbiertaView(request):
+    """Vista para que los agentes puedan abrir una nueva agenda o listar agendas existentes."""
+    if request.method == 'POST':
+        try:
+            data = json.loads(request.body)
+            serializer = AgendaAbiertaModelSerializer(data=data)
+            
+            if serializer.is_valid():
+                serializer.save()  # Guardar la nueva agenda en la base de datos
+                return JsonResponse(serializer.data, status=201)  # Retornar el objeto creado
+            return JsonResponse(serializer.errors, status=400)  # Retornar errores de validación
+        except Exception as e:
+            return JsonResponse({'error': str(e)}, status=500)  # Manejo de errores
+
+    elif request.method == 'GET':
+        try:
+            agendas = AgendaAbiertaModel.objects.all()  # Obtener todas las agendas
+            serializer = AgendaAbiertaModelSerializer(agendas, many=True)  # Serializar las agendas
+            return JsonResponse(serializer.data, safe=False)  # Retornar las agendas como JSON
+        except Exception as e:
+            return JsonResponse({'error': str(e)}, status=500)  # Manejo de errores
+
+    return JsonResponse({'error': 'Método no permitido'}, status=405)  # Manejo de métodos no permitidos
+
+@csrf_exempt
+def agendaAgentView(request):
+    """Vista para manejar la conversación con el agente de agendas."""
+    if request.method == 'POST':
+        try:
+            data = json.loads(request.body)
+            action = data.get('action', '')
+            
+            agente = AgenteAgenda()
+            
+            if action == 'iniciar':
+                agente.reset()
+                response = agente.procesar_mensaje('')
+                return JsonResponse(response)
+            
+            elif action == 'mensaje':
+                mensaje = data.get('mensaje', '')
+                response = agente.procesar_mensaje(mensaje)
+                return JsonResponse(response)
+            
+            else:
+                return JsonResponse({'error': 'Acción no reconocida'}, status=400)
+                
+        except Exception as e:
+            return JsonResponse({'error': f"Error al procesar la solicitud: {str(e)}"}, status=500)
+    
+    return JsonResponse({'error': 'Método no permitido'}, status=405)

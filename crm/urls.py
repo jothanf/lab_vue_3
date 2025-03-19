@@ -1,6 +1,13 @@
 from django.urls import path, include
 from rest_framework.routers import DefaultRouter
-from .views import AmenidadesModelViewSet, CaracteristicasInterioresModelViewSet, ZonasDeInteresModelViewSet, LocalidadModelViewSet, BarrioModelViewSet, ZonaModelViewSet, EdificioModelViewSet, PropiedadModelViewSet, RequerimientoModelViewSet, TareaModelViewSet, AgendaModelViewSet, transcribe_audio, analyze_image, PuntoDeInteresModelViewSet, generate_image, requerimientoAIView, requerimientoAgentView
+from .views import (
+    AmenidadesModelViewSet, CaracteristicasInterioresModelViewSet, ZonasDeInteresModelViewSet, 
+    LocalidadModelViewSet, BarrioModelViewSet, ZonaModelViewSet, EdificioModelViewSet, 
+    PropiedadModelViewSet, RequerimientoModelViewSet, TareaModelViewSet, AgendaModelViewSet, 
+    transcribe_audio, analyze_image, PuntoDeInteresModelViewSet, generate_image, 
+    requerimientoAIView, requerimientoAgentView, propiedadAIView, propiedadAgentView,
+    agendaAbiertaView, agendaAgentView
+)
 from django.conf import settings
 from django.conf.urls.static import static
 
@@ -25,4 +32,8 @@ urlpatterns = [
     path('generate-image/', generate_image, name='generate-image'),
     path('requerimientoAI/', requerimientoAIView, name='requerimientoAI'),
     path('requerimientoAgent/', requerimientoAgentView, name='requerimientoAgent'),
+    path('propiedadAI/', propiedadAIView, name='propiedadAI'),
+    path('propiedadAgent/', propiedadAgentView, name='propiedadAgent'),
+    path('agendaAbierta/', agendaAbiertaView, name='agendaAbierta'),
+    path('agendaAgent/', agendaAgentView, name='agendaAgent'),
 ] + static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)

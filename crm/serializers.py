@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from .models import AmenidadesModel, CaracteristicasInterioresModel, ZonasDeInteresModel, LocalidadModel, BarrioModel, ZonaModel, EdificioModel, PropiedadModel, AgenteModel, ClienteModel, MultimediaModel, RequerimientoModel, TareaModel, FaseSeguimientoModel, PuntoDeInteresModel, AgendaModel
+from .models import AmenidadesModel, CaracteristicasInterioresModel, ZonasDeInteresModel, LocalidadModel, BarrioModel, ZonaModel, EdificioModel, PropiedadModel, AgenteModel, ClienteModel, MultimediaModel, RequerimientoModel, TareaModel, FaseSeguimientoModel, PuntoDeInteresModel, AgendaModel, AgendaAbiertaModel
 import json
 from accounts.serializers import ClienteSerializer
 from django.contrib.contenttypes.models import ContentType
@@ -480,5 +480,10 @@ class FaseSeguimientoModelSerializer(serializers.ModelSerializer):
 class AgendaModelSerializer(serializers.ModelSerializer):
     class Meta:
         model = AgendaModel
+        fields = '__all__'
+
+class AgendaAbiertaModelSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = AgendaAbiertaModel
         fields = '__all__'
 

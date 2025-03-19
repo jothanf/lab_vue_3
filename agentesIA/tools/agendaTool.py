@@ -109,12 +109,12 @@ class AgendaTool(BaseTool):
             }
 
 def obtener_agentes_disponibles() -> List[Dict[str, Any]]:
-    """
-    Obtiene la lista de agentes disponibles para agendar citas.
     
-    Returns:
-        Lista de diccionarios con información de los agentes
-    """
+    #Obtiene la lista de agentes disponibles para agendar citas.
+    
+    #Returns:
+    #    Lista de diccionarios con información de los agentes
+  
     try:
         # Usar URL directa en lugar de settings.BASE_URL
         url = "http://127.0.0.1:8000/accounts/agente/"

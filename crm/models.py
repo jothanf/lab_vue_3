@@ -452,3 +452,12 @@ class AgendaModel(models.Model):
     propiedad = models.ForeignKey('PropiedadModel', on_delete=models.CASCADE, null=True, blank=True)
     estado = models.CharField(max_length=20, default='pendiente')
     notas = models.TextField(blank=True, null=True)
+
+class AgendaAbiertaModel(models.Model):
+    agente = models.ForeignKey(AgenteModel, on_delete=models.CASCADE, null=True, blank=True)
+    fecha = models.DateField()
+    hora = models.TimeField()
+    cliente = models.ForeignKey(ClienteModel, on_delete=models.CASCADE, null=True, blank=True)
+    disponible = models.BooleanField(default=True)
+    comentarios = models.TextField(blank=True, null=True)
+   
