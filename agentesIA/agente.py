@@ -11,7 +11,7 @@ from agentesIA.tools.requerimientoTool import get_requerimiento_tool
 load_dotenv()
 
 # Definir el modelo de lenguaje
-llm = ChatOpenAI(model="gpt-3.5-turbo")
+llm = ChatOpenAI(model="gpt-4o-mini")
 
 # Mensaje de sistema para definir el comportamiento del agente
 SYSTEM_MESSAGE = """

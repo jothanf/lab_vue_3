@@ -17,7 +17,7 @@ OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 memory = ConversationBufferMemory(memory_key="history")
 
 # Inicializar el modelo de lenguaje con GPT-4
-llm = ChatOpenAI(model_name="gpt-4", temperature=0.7, openai_api_key=OPENAI_API_KEY)
+llm = ChatOpenAI(model_name="gpt-4o-mini", temperature=0.7, openai_api_key=OPENAI_API_KEY)
 
 # Lista de aspectos clave a preguntar
 aspectos = [

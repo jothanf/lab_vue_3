@@ -70,7 +70,7 @@ def agent_tool(resumen=None, cliente_id=29, agente_id=12):
             f"- no_negocibles (texto)\n"
         )
         
-        llm = ChatOpenAI(model_name="gpt-4", temperature=0.2, openai_api_key=OPENAI_API_KEY)
+        llm = ChatOpenAI(model_name="gpt-4o-mini", temperature=0.2, openai_api_key=OPENAI_API_KEY)
         llm_output = llm.predict(prompt_simple)
         print("Respuesta LLM:", llm_output[:150] + "..." if len(llm_output) > 150 else llm_output)
         

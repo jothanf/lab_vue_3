@@ -168,7 +168,7 @@ def agent_tool(resumen=None, respuestas=None, agente_id=12, propietario_id=None)
             f"Devuelve solo el objeto JSON mejorado sin ningún texto adicional."
         )
         
-        llm = ChatOpenAI(model_name="gpt-4", temperature=0.2, openai_api_key=OPENAI_API_KEY)
+        llm = ChatOpenAI(model_name="gpt-4o-mini", temperature=0.2, openai_api_key=OPENAI_API_KEY)
         llm_output = llm.predict(prompt_structure)
         print("Respuesta LLM:", llm_output[:150] + "..." if len(llm_output) > 150 else llm_output)
         
